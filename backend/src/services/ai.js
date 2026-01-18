@@ -2,15 +2,39 @@
 // Provides summarization, categorization, and scoring
 
 import { recordUsage } from './usage.js';
+import { getSelectedModelConfig } from './settings.js';
+import { DEFAULT_MODEL, getModelConfig } from '../config/models.js';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-// Use Claude Haiku 4.5 - fast, efficient, excellent coding/reasoning
-const MODEL = 'anthropic/claude-haiku-4.5';
+// Cache the current model (refreshed when settings change)
+let currentModelConfig = null;
 
-// Export model for usage tracking
+/**
+ * Get the current model config (from settings or default)
+ */
+async function getCurrentModel() {
+  if (!currentModelConfig) {
+    try {
+      currentModelConfig = await getSelectedModelConfig();
+    } catch (err) {
+      console.log('[AI] Using default model:', err.message);
+      currentModelConfig = getModelConfig(DEFAULT_MODEL);
+    }
+  }
+  return currentModelConfig;
+}
+
+/**
+ * Clear cached model (call when settings change)
+ */
+export function clearModelCache() {
+  currentModelConfig = null;
+}
+
+// Export model for usage tracking (returns current model ID)
 export function getModel() {
-  return MODEL;
+  return currentModelConfig?.id || getModelConfig(DEFAULT_MODEL).id;
 }
 
 // Check if OpenRouter is configured
@@ -31,6 +55,9 @@ async function callOpenRouter(systemPrompt, userPrompt, operation = 'unknown', c
     throw new Error('OpenRouter API key not configured');
   }
 
+  // Get the selected model from settings
+  const modelConfig = await getCurrentModel();
+
   const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
     headers: {
@@ -40,13 +67,13 @@ async function callOpenRouter(systemPrompt, userPrompt, operation = 'unknown', c
       'X-Title': 'Tab Vault',
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: modelConfig.id,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      max_tokens: 500,
-      temperature: 0.3,
+      max_tokens: modelConfig.maxTokens || 500,
+      temperature: modelConfig.temperature || 0.3,
     }),
   });
 
@@ -67,7 +94,7 @@ async function callOpenRouter(systemPrompt, userPrompt, operation = 'unknown', c
   recordUsage({
     captureId,
     service: 'openrouter',
-    model: MODEL,
+    model: modelConfig.id,
     operation,
     inputTokens: usage.input,
     outputTokens: usage.output,

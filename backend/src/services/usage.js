@@ -5,9 +5,15 @@ import { supabase, isConfigured } from './supabase.js';
 
 // Pricing per million tokens (in cents)
 const PRICING = {
+  // Claude models
   'anthropic/claude-haiku-4.5': { input: 100, output: 500 },      // $1/$5 per M
+  'anthropic/claude-sonnet-4-20250514': { input: 300, output: 1500 }, // $3/$15 per M
   'anthropic/claude-3.5-haiku': { input: 80, output: 400 },       // $0.80/$4 per M
   'anthropic/claude-3-haiku': { input: 25, output: 125 },         // $0.25/$1.25 per M
+  // OpenAI models
+  'openai/gpt-4o-mini': { input: 15, output: 60 },                // $0.15/$0.60 per M
+  'openai/gpt-4o': { input: 250, output: 1000 },                  // $2.50/$10 per M
+  // Embeddings
   'text-embedding-3-small': { input: 2, output: 0 },              // $0.02 per M (no output)
   'text-embedding-3-large': { input: 13, output: 0 },             // $0.13 per M
 };

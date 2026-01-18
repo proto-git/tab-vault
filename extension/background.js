@@ -35,6 +35,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     getRecentCaptures().then(sendResponse);
     return true;
   }
+  if (request.action === 'getSettings') {
+    getSettings().then(sendResponse);
+    return true;
+  }
+  if (request.action === 'updateSettings') {
+    updateSettings(request.settings).then(sendResponse);
+    return true;
+  }
+  if (request.action === 'getUsage') {
+    getUsage().then(sendResponse);
+    return true;
+  }
 });
 
 // Capture the current tab
@@ -116,6 +128,54 @@ async function getRecentCaptures() {
   } catch (error) {
     console.error('Failed to get recent:', error);
     return { success: false, error: error.message, results: [] };
+  }
+}
+
+// Get settings
+async function getSettings() {
+  try {
+    const response = await fetch(`${API_URL}/settings`);
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to get settings:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Update settings
+async function updateSettings(settings) {
+  try {
+    const response = await fetch(`${API_URL}/settings`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(settings)
+    });
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to update settings:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Get usage stats
+async function getUsage() {
+  try {
+    const response = await fetch(`${API_URL}/usage`);
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to get usage:', error);
+    return { success: false, error: error.message };
   }
 }
 

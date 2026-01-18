@@ -1,9 +1,10 @@
 import express from 'express';
 import { supabase, isConfigured } from '../services/supabase.js';
 import { processInBackground, processPendingCaptures, processCapture } from '../services/processor.js';
-import { isConfigured as isAiConfigured, getModel as getAiModel } from '../services/ai.js';
+import { isConfigured as isAiConfigured, getModel as getAiModel, clearModelCache } from '../services/ai.js';
 import { isConfigured as isEmbeddingsConfigured, getModel as getEmbeddingsModel } from '../services/embeddings.js';
 import { getUsageSummary, getTodayUsage } from '../services/usage.js';
+import { getSettingsWithOptions, updateSettings } from '../services/settings.js';
 
 const router = express.Router();
 
@@ -296,6 +297,45 @@ router.post('/reprocess/:id', async (req, res, next) => {
     const { id } = req.params;
     const result = await processCapture(id);
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/settings - Get current settings with available options
+router.get('/settings', async (req, res, next) => {
+  try {
+    const settings = await getSettingsWithOptions();
+    res.json({
+      success: true,
+      ...settings,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/settings - Update settings
+router.put('/settings', async (req, res, next) => {
+  try {
+    const { aiModel } = req.body;
+
+    const result = await updateSettings({ aiModel });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    // Clear AI model cache so next request uses new model
+    clearModelCache();
+
+    // Return updated settings
+    const settings = await getSettingsWithOptions();
+    res.json({
+      success: true,
+      message: 'Settings updated',
+      ...settings,
+    });
   } catch (error) {
     next(error);
   }

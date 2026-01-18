@@ -1,7 +1,11 @@
 // Tab Vault Popup Script
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Elements
+  // Views
+  const mainView = document.getElementById('mainView');
+  const settingsView = document.getElementById('settingsView');
+
+  // Main view elements
   const captureBtn = document.getElementById('captureBtn');
   const captureStatus = document.getElementById('captureStatus');
   const searchInput = document.getElementById('searchInput');
@@ -10,6 +14,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultsContainer = document.getElementById('results');
   const openFullSearch = document.getElementById('openFullSearch');
   const openSettings = document.getElementById('openSettings');
+
+  // Settings view elements
+  const backToMain = document.getElementById('backToMain');
+  const modelSelect = document.getElementById('modelSelect');
+  const modelInfo = document.getElementById('modelInfo');
+  const usageStats = document.getElementById('usageStats');
+  const apiUrlInput = document.getElementById('apiUrlInput');
+  const saveApiUrl = document.getElementById('saveApiUrl');
+  const settingsStatus = document.getElementById('settingsStatus');
+
+  // State
+  let availableModels = [];
+  let currentModel = '';
 
   // Load recent captures on open
   loadRecentCaptures();
@@ -26,12 +43,11 @@ document.addEventListener('DOMContentLoaded', () => {
     captureBtn.disabled = false;
     captureBtn.innerHTML = '<span class="icon">+</span> Capture This Tab';
 
-    showStatus(response.success, response.success
+    showStatus(captureStatus, response.success, response.success
       ? 'Captured! ' + (response.data?.category || '')
       : response.error || 'Failed to capture');
 
     if (response.success) {
-      // Refresh results
       setTimeout(loadRecentCaptures, 500);
     }
   });
@@ -81,7 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `).join('');
 
-    // Add click handlers to open URLs
     resultsContainer.querySelectorAll('.result-item').forEach(item => {
       item.addEventListener('click', () => {
         chrome.tabs.create({ url: item.dataset.url });
@@ -89,13 +104,162 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function showStatus(success, message) {
-    captureStatus.textContent = message;
-    captureStatus.className = `status ${success ? 'success' : 'error'}`;
-    captureStatus.classList.remove('hidden');
+  // Settings navigation
+  openSettings.addEventListener('click', (e) => {
+    e.preventDefault();
+    showSettingsView();
+  });
+
+  backToMain.addEventListener('click', () => {
+    showMainView();
+  });
+
+  function showSettingsView() {
+    mainView.classList.add('hidden');
+    settingsView.classList.remove('hidden');
+    loadSettings();
+    loadUsageStats();
+    loadApiUrl();
+  }
+
+  function showMainView() {
+    settingsView.classList.add('hidden');
+    mainView.classList.remove('hidden');
+  }
+
+  // Load settings from API
+  async function loadSettings() {
+    modelSelect.innerHTML = '<option value="">Loading...</option>';
+    modelInfo.innerHTML = '';
+
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
+
+      if (response.success) {
+        availableModels = response.options.models;
+        currentModel = response.current.aiModel;
+
+        modelSelect.innerHTML = availableModels.map(model => `
+          <option value="${model.key}" ${model.key === currentModel ? 'selected' : ''}>
+            ${model.name} (${model.provider})
+          </option>
+        `).join('');
+
+        updateModelInfo(currentModel);
+      } else {
+        modelSelect.innerHTML = '<option value="">Failed to load</option>';
+      }
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+      modelSelect.innerHTML = '<option value="">Error loading settings</option>';
+    }
+  }
+
+  // Model selection change
+  modelSelect.addEventListener('change', async () => {
+    const newModel = modelSelect.value;
+    if (!newModel || newModel === currentModel) return;
+
+    modelSelect.disabled = true;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'updateSettings',
+        settings: { aiModel: newModel }
+      });
+
+      if (response.success) {
+        currentModel = newModel;
+        updateModelInfo(newModel);
+        showStatus(settingsStatus, true, 'Model updated!');
+      } else {
+        showStatus(settingsStatus, false, response.error || 'Failed to update');
+        modelSelect.value = currentModel; // Revert
+      }
+    } catch (err) {
+      showStatus(settingsStatus, false, 'Error updating model');
+      modelSelect.value = currentModel;
+    }
+
+    modelSelect.disabled = false;
+  });
+
+  function updateModelInfo(modelKey) {
+    const model = availableModels.find(m => m.key === modelKey);
+    if (!model) {
+      modelInfo.innerHTML = '';
+      return;
+    }
+
+    modelInfo.innerHTML = `
+      <div class="model-detail">
+        <span class="label">Speed</span>
+        <span class="value">${capitalize(model.speed)}</span>
+      </div>
+      <div class="model-detail">
+        <span class="label">Quality</span>
+        <span class="value">${capitalize(model.quality)}</span>
+      </div>
+      <div class="model-detail">
+        <span class="label">Est. Cost/Capture</span>
+        <span class="value">${model.estimatedCostPerCapture}</span>
+      </div>
+    `;
+  }
+
+  // Load usage stats
+  async function loadUsageStats() {
+    usageStats.innerHTML = '<div class="loading">Loading...</div>';
+
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getUsage' });
+
+      if (response.success && response.today) {
+        usageStats.innerHTML = `
+          <div class="stat-row">
+            <span class="stat-label">Requests</span>
+            <span class="stat-value">${response.today.requests}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Tokens</span>
+            <span class="stat-value">${response.today.tokens.toLocaleString()}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Cost</span>
+            <span class="stat-value cost">$${response.today.cost}</span>
+          </div>
+        `;
+      } else {
+        usageStats.innerHTML = '<div class="empty">No usage data yet</div>';
+      }
+    } catch (err) {
+      usageStats.innerHTML = '<div class="empty">Failed to load usage</div>';
+    }
+  }
+
+  // API URL management
+  function loadApiUrl() {
+    chrome.storage.sync.get(['apiUrl'], (result) => {
+      apiUrlInput.value = result.apiUrl || 'https://backend-production-49f0.up.railway.app/api';
+    });
+  }
+
+  saveApiUrl.addEventListener('click', () => {
+    const newUrl = apiUrlInput.value.trim();
+    if (newUrl) {
+      chrome.storage.sync.set({ apiUrl: newUrl });
+      showStatus(settingsStatus, true, 'API URL saved!');
+    }
+  });
+
+  // Utility functions
+  function showStatus(element, success, message) {
+    element.textContent = message;
+    element.className = `status ${success ? 'success' : 'error'}`;
+    element.classList.remove('hidden');
 
     setTimeout(() => {
-      captureStatus.classList.add('hidden');
+      element.classList.add('hidden');
     }, 3000);
   }
 
@@ -120,26 +284,16 @@ document.addEventListener('DOMContentLoaded', () => {
     return div.innerHTML;
   }
 
+  function capitalize(str) {
+    return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
+  }
+
   // Footer links
   openFullSearch.addEventListener('click', (e) => {
     e.preventDefault();
-    // Will be updated when frontend is deployed
     chrome.storage.sync.get(['frontendUrl'], (result) => {
       const url = result.frontendUrl || 'http://localhost:3002';
       chrome.tabs.create({ url });
-    });
-  });
-
-  openSettings.addEventListener('click', (e) => {
-    e.preventDefault();
-    // Simple settings via prompt for now
-    chrome.storage.sync.get(['apiUrl'], (result) => {
-      const currentUrl = result.apiUrl || 'https://backend-production-49f0.up.railway.app/api';
-      const newUrl = prompt('API URL:', currentUrl);
-      if (newUrl && newUrl !== currentUrl) {
-        chrome.storage.sync.set({ apiUrl: newUrl });
-        alert('API URL updated!');
-      }
     });
   });
 });
