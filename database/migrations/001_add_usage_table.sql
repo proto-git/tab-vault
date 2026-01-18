@@ -30,8 +30,8 @@ CREATE INDEX IF NOT EXISTS usage_capture_id_idx ON usage(capture_id);
 CREATE INDEX IF NOT EXISTS usage_service_idx ON usage(service);
 CREATE INDEX IF NOT EXISTS usage_created_at_idx ON usage(created_at DESC);
 
--- Index for date-based aggregations
-CREATE INDEX IF NOT EXISTS usage_created_at_date_idx ON usage(DATE(created_at));
+-- Note: Skipping date expression index due to Supabase SQL editor limitations
+-- The created_at DESC index handles date-based queries sufficiently
 
 -- Row Level Security
 ALTER TABLE usage ENABLE ROW LEVEL SECURITY;
@@ -59,13 +59,13 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    DATE(u.created_at) as date,
-    SUM(u.cost_cents)::BIGINT as total_cost_cents,
-    SUM(u.total_tokens)::BIGINT as total_tokens,
-    COUNT(DISTINCT u.capture_id)::BIGINT as capture_count
+    CAST(u.created_at AS DATE) as date,
+    CAST(SUM(u.cost_cents) AS BIGINT) as total_cost_cents,
+    CAST(SUM(u.total_tokens) AS BIGINT) as total_tokens,
+    CAST(COUNT(DISTINCT u.capture_id) AS BIGINT) as capture_count
   FROM usage u
-  WHERE u.created_at >= NOW() - (days_back || ' days')::INTERVAL
-  GROUP BY DATE(u.created_at)
+  WHERE u.created_at >= NOW() - CAST(days_back || ' days' AS INTERVAL)
+  GROUP BY CAST(u.created_at AS DATE)
   ORDER BY date DESC;
 END;
 $$;
@@ -86,11 +86,11 @@ BEGIN
   SELECT
     u.service,
     u.model,
-    SUM(u.cost_cents)::BIGINT as total_cost_cents,
-    SUM(u.total_tokens)::BIGINT as total_tokens,
-    COUNT(*)::BIGINT as request_count
+    CAST(SUM(u.cost_cents) AS BIGINT) as total_cost_cents,
+    CAST(SUM(u.total_tokens) AS BIGINT) as total_tokens,
+    CAST(COUNT(*) AS BIGINT) as request_count
   FROM usage u
-  WHERE u.created_at >= NOW() - (days_back || ' days')::INTERVAL
+  WHERE u.created_at >= NOW() - CAST(days_back || ' days' AS INTERVAL)
   GROUP BY u.service, u.model
   ORDER BY total_cost_cents DESC;
 END;
