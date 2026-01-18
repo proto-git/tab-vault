@@ -61,7 +61,8 @@ export async function processCapture(captureId) {
       try {
         const aiResult = await processContent(
           capture.title || capture.url,
-          content || capture.title || ''
+          content || capture.title || '',
+          captureId
         );
 
         updates.summary = aiResult.summary;

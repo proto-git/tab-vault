@@ -1,10 +1,17 @@
 // AI Service using OpenRouter
 // Provides summarization, categorization, and scoring
 
+import { recordUsage } from './usage.js';
+
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 // Use Claude Haiku 4.5 - fast, efficient, excellent coding/reasoning
 const MODEL = 'anthropic/claude-haiku-4.5';
+
+// Export model for usage tracking
+export function getModel() {
+  return MODEL;
+}
 
 // Check if OpenRouter is configured
 export function isConfigured() {
@@ -15,9 +22,11 @@ export function isConfigured() {
  * Make a request to OpenRouter
  * @param {string} systemPrompt - System instructions
  * @param {string} userPrompt - User message
- * @returns {Promise<string>} - Model response
+ * @param {string} operation - Operation name for usage tracking
+ * @param {string|null} captureId - Capture ID for usage tracking
+ * @returns {Promise<{content: string, usage: {input: number, output: number}}>}
  */
-async function callOpenRouter(systemPrompt, userPrompt) {
+async function callOpenRouter(systemPrompt, userPrompt, operation = 'unknown', captureId = null) {
   if (!isConfigured()) {
     throw new Error('OpenRouter API key not configured');
   }
@@ -47,16 +56,37 @@ async function callOpenRouter(systemPrompt, userPrompt) {
   }
 
   const data = await response.json();
-  return data.choices[0]?.message?.content || '';
+
+  // Extract usage from response
+  const usage = {
+    input: data.usage?.prompt_tokens || 0,
+    output: data.usage?.completion_tokens || 0,
+  };
+
+  // Record usage asynchronously (don't block response)
+  recordUsage({
+    captureId,
+    service: 'openrouter',
+    model: MODEL,
+    operation,
+    inputTokens: usage.input,
+    outputTokens: usage.output,
+  }).catch(err => console.error('[AI] Failed to record usage:', err));
+
+  return {
+    content: data.choices[0]?.message?.content || '',
+    usage,
+  };
 }
 
 /**
  * Summarize content into 2-3 sentences
  * @param {string} title - Page title
  * @param {string} content - Page content
+ * @param {string|null} captureId - Capture ID for usage tracking
  * @returns {Promise<string>} - Summary
  */
-export async function summarize(title, content) {
+export async function summarize(title, content, captureId = null) {
   const systemPrompt = `You are a concise summarizer. Create a 2-3 sentence summary that captures the key points and value of the content. Focus on what makes this content useful or interesting.`;
 
   const userPrompt = `Title: ${title}
@@ -66,16 +96,18 @@ ${content.slice(0, 8000)}
 
 Provide a 2-3 sentence summary:`;
 
-  return await callOpenRouter(systemPrompt, userPrompt);
+  const response = await callOpenRouter(systemPrompt, userPrompt, 'summarize', captureId);
+  return response.content;
 }
 
 /**
  * Categorize content and generate tags
  * @param {string} title - Page title
  * @param {string} content - Page content
+ * @param {string|null} captureId - Capture ID for usage tracking
  * @returns {Promise<{category: string, tags: string[]}>}
  */
-export async function categorize(title, content) {
+export async function categorize(title, content, captureId = null) {
   const systemPrompt = `You categorize web content. Respond with JSON only, no other text.
 
 Categories (pick one):
@@ -96,11 +128,11 @@ ${content.slice(0, 4000)}
 
 Categorize this content:`;
 
-  const response = await callOpenRouter(systemPrompt, userPrompt);
+  const response = await callOpenRouter(systemPrompt, userPrompt, 'categorize', captureId);
 
   try {
     // Extract JSON from response (handle markdown code blocks)
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    const jsonMatch = response.content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
     }
@@ -116,9 +148,10 @@ Categorize this content:`;
  * @param {string} title - Page title
  * @param {string} summary - Content summary
  * @param {string} category - Content category
+ * @param {string|null} captureId - Capture ID for usage tracking
  * @returns {Promise<{quality: number, actionability: number}>}
  */
-export async function score(title, summary, category) {
+export async function score(title, summary, category, captureId = null) {
   const systemPrompt = `You rate content quality and actionability. Respond with JSON only.
 
 Quality (1-10): How valuable, well-written, and informative is this content?
@@ -141,10 +174,10 @@ Summary: ${summary}
 
 Rate this content:`;
 
-  const response = await callOpenRouter(systemPrompt, userPrompt);
+  const response = await callOpenRouter(systemPrompt, userPrompt, 'score', captureId);
 
   try {
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    const jsonMatch = response.content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       return {
@@ -163,17 +196,18 @@ Rate this content:`;
  * Process content through all AI steps
  * @param {string} title - Page title
  * @param {string} content - Page content
+ * @param {string|null} captureId - Capture ID for usage tracking
  * @returns {Promise<{summary: string, category: string, tags: string[], quality: number, actionability: number}>}
  */
-export async function processContent(title, content) {
+export async function processContent(title, content, captureId = null) {
   // Run summarize and categorize in parallel
   const [summary, categoryResult] = await Promise.all([
-    summarize(title, content),
-    categorize(title, content),
+    summarize(title, content, captureId),
+    categorize(title, content, captureId),
   ]);
 
   // Score based on summary
-  const scores = await score(title, summary, categoryResult.category);
+  const scores = await score(title, summary, categoryResult.category, captureId);
 
   return {
     summary,

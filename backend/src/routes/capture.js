@@ -1,8 +1,9 @@
 import express from 'express';
 import { supabase, isConfigured } from '../services/supabase.js';
 import { processInBackground, processPendingCaptures, processCapture } from '../services/processor.js';
-import { isConfigured as isAiConfigured } from '../services/ai.js';
-import { isConfigured as isEmbeddingsConfigured } from '../services/embeddings.js';
+import { isConfigured as isAiConfigured, getModel as getAiModel } from '../services/ai.js';
+import { isConfigured as isEmbeddingsConfigured, getModel as getEmbeddingsModel } from '../services/embeddings.js';
+import { getUsageSummary, getTodayUsage } from '../services/usage.js';
 
 const router = express.Router();
 
@@ -238,8 +239,42 @@ router.get('/status', async (req, res) => {
       ai: isAiConfigured(),
       embeddings: isEmbeddingsConfigured(),
     },
-    version: '2.0.0', // Phase 2
+    models: {
+      ai: getAiModel(),
+      embeddings: getEmbeddingsModel(),
+    },
+    version: '2.1.0', // Phase 2 + cost tracking
   });
+});
+
+// GET /api/usage - Get usage statistics (admin)
+router.get('/usage', async (req, res, next) => {
+  try {
+    const daysBack = Math.min(parseInt(req.query.days) || 30, 90);
+
+    // Get both summary and today's usage in parallel
+    const [summary, today] = await Promise.all([
+      getUsageSummary(daysBack),
+      getTodayUsage(),
+    ]);
+
+    if (!summary.success) {
+      return res.json({
+        success: false,
+        error: summary.error,
+      });
+    }
+
+    res.json({
+      success: true,
+      today: today.success ? today.today : null,
+      summary: summary.summary,
+      daily: summary.daily,
+      byService: summary.byService,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // POST /api/process-pending - Process pending captures (admin)
