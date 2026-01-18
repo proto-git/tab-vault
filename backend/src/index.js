@@ -1,10 +1,9 @@
+// Load environment variables (must be first import)
+import 'dotenv/config';
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import captureRouter from './routes/capture.js';
-
-// Load environment variables
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;

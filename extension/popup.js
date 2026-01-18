@@ -133,11 +133,13 @@ document.addEventListener('DOMContentLoaded', () => {
   openSettings.addEventListener('click', (e) => {
     e.preventDefault();
     // Simple settings via prompt for now
-    const currentUrl = localStorage.getItem('apiUrl') || 'http://localhost:3001/api';
-    const newUrl = prompt('API URL:', currentUrl);
-    if (newUrl) {
-      chrome.storage.sync.set({ apiUrl: newUrl });
-      alert('API URL updated. Reload extension to apply.');
-    }
+    chrome.storage.sync.get(['apiUrl'], (result) => {
+      const currentUrl = result.apiUrl || 'https://backend-production-49f0.up.railway.app/api';
+      const newUrl = prompt('API URL:', currentUrl);
+      if (newUrl && newUrl !== currentUrl) {
+        chrome.storage.sync.set({ apiUrl: newUrl });
+        alert('API URL updated!');
+      }
+    });
   });
 });

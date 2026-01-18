@@ -1,5 +1,8 @@
 import express from 'express';
 import { supabase, isConfigured } from '../services/supabase.js';
+import { processInBackground, processPendingCaptures, processCapture } from '../services/processor.js';
+import { isConfigured as isAiConfigured } from '../services/ai.js';
+import { isConfigured as isEmbeddingsConfigured } from '../services/embeddings.js';
 
 const router = express.Router();
 
@@ -69,8 +72,8 @@ router.post('/capture', async (req, res, next) => {
 
     console.log('[CAPTURED]', url);
 
-    // TODO (Phase 2): Queue for AI processing
-    // await queueForProcessing(data.id);
+    // Queue for AI processing (runs in background)
+    processInBackground(data.id);
 
     res.json({
       success: true,
@@ -221,6 +224,43 @@ router.delete('/capture/:id', async (req, res, next) => {
       success: true,
       message: 'Deleted successfully'
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/status - Service status (admin)
+router.get('/status', async (req, res) => {
+  res.json({
+    success: true,
+    services: {
+      supabase: isConfigured(),
+      ai: isAiConfigured(),
+      embeddings: isEmbeddingsConfigured(),
+    },
+    version: '2.0.0', // Phase 2
+  });
+});
+
+// POST /api/process-pending - Process pending captures (admin)
+router.post('/process-pending', async (req, res, next) => {
+  try {
+    const result = await processPendingCaptures();
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/reprocess/:id - Reprocess a specific capture (admin)
+router.post('/reprocess/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await processCapture(id);
+    res.json(result);
   } catch (error) {
     next(error);
   }

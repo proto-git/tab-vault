@@ -1,7 +1,18 @@
 // Tab Vault - Background Service Worker
 
-// Configuration - Update this after deploying backend
-const API_URL = 'http://localhost:3001/api';
+// Configuration - Production backend URL (can be overridden via extension settings)
+const DEFAULT_API_URL = 'https://backend-production-49f0.up.railway.app/api';
+let API_URL = DEFAULT_API_URL;
+
+// Load custom API URL from storage on startup
+chrome.storage.sync.get(['apiUrl'], (result) => {
+  if (result.apiUrl) {
+    API_URL = result.apiUrl;
+    console.log('[Tab Vault] Using custom API URL:', API_URL);
+  } else {
+    console.log('[Tab Vault] Using default API URL:', API_URL);
+  }
+});
 
 // Listen for keyboard shortcut
 chrome.commands.onCommand.addListener(async (command) => {
@@ -115,10 +126,10 @@ function showNotification(title, message) {
   console.log(`[Tab Vault] ${title}: ${message}`);
 }
 
-// Update API URL from storage (for when backend is deployed)
-chrome.storage.sync.get(['apiUrl'], (result) => {
-  if (result.apiUrl) {
-    // Note: Can't reassign const, would need different pattern for production
-    console.log('Custom API URL configured:', result.apiUrl);
+// Listen for storage changes to update API URL dynamically
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'sync' && changes.apiUrl) {
+    API_URL = changes.apiUrl.newValue || DEFAULT_API_URL;
+    console.log('[Tab Vault] API URL updated:', API_URL);
   }
 });
