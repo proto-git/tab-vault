@@ -3,8 +3,8 @@
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-// Use a cost-effective model - Claude 3 Haiku or GPT-4o-mini
-const MODEL = 'anthropic/claude-3-haiku';
+// Use Claude Haiku 4.5 - fast, efficient, excellent coding/reasoning
+const MODEL = 'anthropic/claude-haiku-4.5';
 
 // Check if OpenRouter is configured
 export function isConfigured() {
