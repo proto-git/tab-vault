@@ -141,7 +141,7 @@ router.get('/search', async (req, res, next) => {
 router.get('/semantic-search', async (req, res, next) => {
   try {
     const { q: query } = req.query;
-    const threshold = parseFloat(req.query.threshold) || 0.7;
+    const threshold = parseFloat(req.query.threshold) || 0.4;
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
 
     if (!query) {
