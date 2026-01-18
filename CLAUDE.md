@@ -40,7 +40,8 @@ database/           Supabase (PostgreSQL + pgvector)
 ## API Endpoints
 
 - `POST /api/capture` - Capture a URL
-- `GET /api/search?q=` - Search captures
+- `GET /api/search?q=` - Keyword search captures
+- `GET /api/semantic-search?q=` - Vector similarity search (finds conceptually related content)
 - `GET /api/recent` - Recent captures
 - `GET/PUT /api/settings` - Model selection
 - `GET/POST/DELETE /api/categories` - Category management

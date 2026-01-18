@@ -2,7 +2,7 @@ import express from 'express';
 import { supabase, isConfigured } from '../services/supabase.js';
 import { processInBackground, processPendingCaptures, processCapture } from '../services/processor.js';
 import { isConfigured as isAiConfigured, getModel as getAiModel, clearModelCache } from '../services/ai.js';
-import { isConfigured as isEmbeddingsConfigured, getModel as getEmbeddingsModel } from '../services/embeddings.js';
+import { isConfigured as isEmbeddingsConfigured, getModel as getEmbeddingsModel, generateQueryEmbedding, formatForPgVector } from '../services/embeddings.js';
 import { getUsageSummary, getTodayUsage } from '../services/usage.js';
 import { getSettingsWithOptions, updateSettings } from '../services/settings.js';
 import { getCategories, addCategory, updateCategory, deleteCategory } from '../services/categories.js';
@@ -131,6 +131,61 @@ router.get('/search', async (req, res, next) => {
       success: true,
       results: data || [],
       count: data?.length || 0
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/semantic-search - Semantic search using embeddings
+router.get('/semantic-search', async (req, res, next) => {
+  try {
+    const { q: query } = req.query;
+    const threshold = parseFloat(req.query.threshold) || 0.7;
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        error: 'Query parameter "q" is required'
+      });
+    }
+
+    if (!isConfigured()) {
+      return res.json({
+        success: true,
+        results: [],
+        message: 'Dev mode - Supabase not configured'
+      });
+    }
+
+    if (!isEmbeddingsConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Embeddings not configured - missing OpenAI API key'
+      });
+    }
+
+    // Generate embedding for the search query
+    const queryEmbedding = await generateQueryEmbedding(query);
+    const vectorString = formatForPgVector(queryEmbedding);
+
+    // Call the search_captures function
+    const { data, error } = await supabase.rpc('search_captures', {
+      query_embedding: vectorString,
+      match_threshold: threshold,
+      match_count: limit
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      results: data || [],
+      count: data?.length || 0,
+      searchType: 'semantic'
     });
   } catch (error) {
     next(error);

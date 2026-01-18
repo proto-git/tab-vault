@@ -127,9 +127,22 @@ async function captureCurrentTab() {
   }
 }
 
-// Search captures
+// Search captures - tries semantic search first, falls back to keyword
 async function searchCaptures(query) {
   try {
+    // Try semantic search first (finds conceptually similar content)
+    const semanticResponse = await fetch(`${API_URL}/semantic-search?q=${encodeURIComponent(query)}`);
+
+    if (semanticResponse.ok) {
+      const semanticData = await semanticResponse.json();
+      if (semanticData.success && semanticData.results?.length > 0) {
+        console.log('[Tab Vault] Semantic search:', semanticData.count, 'results');
+        return semanticData;
+      }
+    }
+
+    // Fall back to keyword search
+    console.log('[Tab Vault] Falling back to keyword search');
     const response = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`);
     if (!response.ok) {
       throw new Error(`Server error: ${response.status}`);

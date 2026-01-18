@@ -120,3 +120,12 @@ export async function generateCaptureEmbedding(capture) {
 export function formatForPgVector(embedding) {
   return `[${embedding.join(',')}]`;
 }
+
+/**
+ * Generate embedding for a search query
+ * @param {string} query - Search query text
+ * @returns {Promise<number[]>} - Embedding vector
+ */
+export async function generateQueryEmbedding(query) {
+  return await generateEmbedding(query, null);
+}
