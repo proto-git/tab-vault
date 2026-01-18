@@ -17,21 +17,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Settings view elements
   const backToMain = document.getElementById('backToMain');
+  const settingsStatus = document.getElementById('settingsStatus');
+
+  // General tab elements
   const modelSelect = document.getElementById('modelSelect');
   const modelInfo = document.getElementById('modelInfo');
   const usageStats = document.getElementById('usageStats');
   const apiUrlInput = document.getElementById('apiUrlInput');
   const saveApiUrl = document.getElementById('saveApiUrl');
-  const settingsStatus = document.getElementById('settingsStatus');
+
+  // Categories tab elements
+  const categoriesList = document.getElementById('categoriesList');
+  const newCategoryName = document.getElementById('newCategoryName');
+  const newCategoryColor = document.getElementById('newCategoryColor');
+  const newCategoryDesc = document.getElementById('newCategoryDesc');
+  const addCategoryBtn = document.getElementById('addCategoryBtn');
+
+  // Tags tab elements
+  const tagsList = document.getElementById('tagsList');
+  const mergeSource = document.getElementById('mergeSource');
+  const mergeTarget = document.getElementById('mergeTarget');
+  const mergeTagsBtn = document.getElementById('mergeTagsBtn');
 
   // State
   let availableModels = [];
   let currentModel = '';
+  let categories = [];
+  let tags = [];
 
   // Load recent captures on open
   loadRecentCaptures();
 
-  // Capture button click
+  // ============ Main View ============
+
   captureBtn.addEventListener('click', async () => {
     captureBtn.classList.add('loading');
     captureBtn.disabled = true;
@@ -52,7 +70,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Search functionality
   searchBtn.addEventListener('click', performSearch);
   searchInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') performSearch();
@@ -104,7 +121,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Settings navigation
+  // ============ Settings Navigation ============
+
   openSettings.addEventListener('click', (e) => {
     e.preventDefault();
     showSettingsView();
@@ -127,7 +145,33 @@ document.addEventListener('DOMContentLoaded', () => {
     mainView.classList.remove('hidden');
   }
 
-  // Load settings from API
+  // ============ Settings Tabs ============
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabName = btn.dataset.tab;
+
+      // Update active tab button
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Show corresponding tab content
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+
+      // Load tab-specific data
+      if (tabName === 'categories') {
+        loadCategories();
+      } else if (tabName === 'tags') {
+        loadTags();
+      }
+    });
+  });
+
+  // ============ General Tab ============
+
   async function loadSettings() {
     modelSelect.innerHTML = '<option value="">Loading...</option>';
     modelInfo.innerHTML = '';
@@ -155,7 +199,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Model selection change
   modelSelect.addEventListener('change', async () => {
     const newModel = modelSelect.value;
     if (!newModel || newModel === currentModel) return;
@@ -174,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showStatus(settingsStatus, true, 'Model updated!');
       } else {
         showStatus(settingsStatus, false, response.error || 'Failed to update');
-        modelSelect.value = currentModel; // Revert
+        modelSelect.value = currentModel;
       }
     } catch (err) {
       showStatus(settingsStatus, false, 'Error updating model');
@@ -207,7 +250,6 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
   }
 
-  // Load usage stats
   async function loadUsageStats() {
     usageStats.innerHTML = '<div class="loading">Loading...</div>';
 
@@ -237,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // API URL management
   function loadApiUrl() {
     chrome.storage.sync.get(['apiUrl'], (result) => {
       apiUrlInput.value = result.apiUrl || 'https://backend-production-49f0.up.railway.app/api';
@@ -252,7 +293,179 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Utility functions
+  // ============ Categories Tab ============
+
+  async function loadCategories() {
+    categoriesList.innerHTML = '<div class="loading">Loading...</div>';
+
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getCategories' });
+
+      if (response.success) {
+        categories = response.categories;
+        renderCategories();
+      } else {
+        categoriesList.innerHTML = '<div class="empty">Failed to load categories</div>';
+      }
+    } catch (err) {
+      categoriesList.innerHTML = '<div class="empty">Error loading categories</div>';
+    }
+  }
+
+  function renderCategories() {
+    if (!categories.length) {
+      categoriesList.innerHTML = '<div class="empty">No categories</div>';
+      return;
+    }
+
+    categoriesList.innerHTML = categories.map(cat => `
+      <div class="item-row" data-id="${cat.id}">
+        <div class="item-info">
+          <div class="item-color" style="background: ${cat.color}"></div>
+          <span class="item-name">${escapeHtml(cat.name)}</span>
+          ${cat.is_default ? '<span class="item-default">default</span>' : ''}
+        </div>
+        <div class="item-actions">
+          ${!cat.is_default ? `<button class="item-btn delete" data-action="delete-category" data-id="${cat.id}">Delete</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    // Add delete handlers
+    categoriesList.querySelectorAll('[data-action="delete-category"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        if (!confirm('Delete this category? Captures will be moved to "reference".')) return;
+
+        const response = await chrome.runtime.sendMessage({ action: 'deleteCategory', id });
+        if (response.success) {
+          loadCategories();
+          showStatus(settingsStatus, true, 'Category deleted');
+        } else {
+          showStatus(settingsStatus, false, response.error || 'Failed to delete');
+        }
+      });
+    });
+  }
+
+  addCategoryBtn.addEventListener('click', async () => {
+    const name = newCategoryName.value.trim();
+    if (!name) {
+      showStatus(settingsStatus, false, 'Category name is required');
+      return;
+    }
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'addCategory',
+      category: {
+        name,
+        color: newCategoryColor.value,
+        description: newCategoryDesc.value.trim()
+      }
+    });
+
+    if (response.success) {
+      newCategoryName.value = '';
+      newCategoryDesc.value = '';
+      loadCategories();
+      showStatus(settingsStatus, true, 'Category added!');
+    } else {
+      showStatus(settingsStatus, false, response.error || 'Failed to add');
+    }
+  });
+
+  // ============ Tags Tab ============
+
+  async function loadTags() {
+    tagsList.innerHTML = '<div class="loading">Loading...</div>';
+
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getTags' });
+
+      if (response.success) {
+        tags = response.tags || [];
+        renderTags();
+        updateMergeDropdowns();
+      } else {
+        tagsList.innerHTML = '<div class="empty">Failed to load tags</div>';
+      }
+    } catch (err) {
+      tagsList.innerHTML = '<div class="empty">Error loading tags</div>';
+    }
+  }
+
+  function renderTags() {
+    if (!tags.length) {
+      tagsList.innerHTML = '<div class="empty">No tags yet</div>';
+      return;
+    }
+
+    tagsList.innerHTML = tags.map(tag => `
+      <div class="item-row" data-name="${escapeHtml(tag.name)}">
+        <div class="item-info">
+          <span class="item-name">${escapeHtml(tag.name)}</span>
+          <span class="item-count">${tag.count}</span>
+        </div>
+        <div class="item-actions">
+          <button class="item-btn delete" data-action="delete-tag" data-name="${escapeHtml(tag.name)}">Delete</button>
+        </div>
+      </div>
+    `).join('');
+
+    // Add delete handlers
+    tagsList.querySelectorAll('[data-action="delete-tag"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.name;
+        if (!confirm(`Delete tag "${name}" from all captures?`)) return;
+
+        const response = await chrome.runtime.sendMessage({ action: 'deleteTag', name });
+        if (response.success) {
+          loadTags();
+          showStatus(settingsStatus, true, `Tag deleted from ${response.affected} captures`);
+        } else {
+          showStatus(settingsStatus, false, response.error || 'Failed to delete');
+        }
+      });
+    });
+  }
+
+  function updateMergeDropdowns() {
+    const options = tags.map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} (${t.count})</option>`).join('');
+
+    mergeSource.innerHTML = '<option value="">From...</option>' + options;
+    mergeTarget.innerHTML = '<option value="">To...</option>' + options;
+  }
+
+  mergeTagsBtn.addEventListener('click', async () => {
+    const source = mergeSource.value;
+    const target = mergeTarget.value;
+
+    if (!source || !target) {
+      showStatus(settingsStatus, false, 'Select both source and target tags');
+      return;
+    }
+
+    if (source === target) {
+      showStatus(settingsStatus, false, 'Source and target must be different');
+      return;
+    }
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'mergeTags',
+      source,
+      target
+    });
+
+    if (response.success) {
+      loadTags();
+      showStatus(settingsStatus, true, `Merged into "${target}" (${response.affected} captures)`);
+    } else {
+      showStatus(settingsStatus, false, response.error || 'Failed to merge');
+    }
+  });
+
+  // ============ Utilities ============
+
   function showStatus(element, success, message) {
     element.textContent = message;
     element.className = `status ${success ? 'success' : 'error'}`;

@@ -61,11 +61,19 @@
         <button id="backToMain" class="back-btn">&larr; Back</button>
       </header>
 
-      <section class="settings-section">
+      <!-- Settings Tabs -->
+      <div class="settings-tabs">
+        <button class="tab-btn active" data-tab="general">General</button>
+        <button class="tab-btn" data-tab="categories">Categories</button>
+        <button class="tab-btn" data-tab="tags">Tags</button>
+      </div>
+
+      <!-- General Tab -->
+      <section id="tab-general" class="tab-content active">
         <!-- Model Selection -->
         <div class="setting-group">
           <label class="setting-label">AI Model</label>
-          <p class="setting-description">Choose the model used for summarization and categorization</p>
+          <p class="setting-description">Choose the model for summarization</p>
           <select id="modelSelect" class="setting-select">
             <option value="">Loading...</option>
           </select>
@@ -80,11 +88,58 @@
           </div>
         </div>
 
-        <!-- API URL (advanced) -->
+        <!-- API URL -->
         <div class="setting-group">
           <label class="setting-label">API URL</label>
           <input type="text" id="apiUrlInput" class="setting-input" placeholder="https://..." />
           <button id="saveApiUrl" class="save-btn">Save</button>
+        </div>
+      </section>
+
+      <!-- Categories Tab -->
+      <section id="tab-categories" class="tab-content">
+        <div class="setting-group">
+          <label class="setting-label">Categories</label>
+          <p class="setting-description">Customize how captures are organized</p>
+          <div id="categoriesList" class="items-list">
+            <div class="loading">Loading...</div>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">Add Category</label>
+          <div class="add-form">
+            <input type="text" id="newCategoryName" class="setting-input-sm" placeholder="Name" />
+            <input type="color" id="newCategoryColor" class="color-picker" value="#667eea" />
+            <button id="addCategoryBtn" class="add-btn">Add</button>
+          </div>
+          <input type="text" id="newCategoryDesc" class="setting-input" placeholder="Description (optional)" />
+        </div>
+      </section>
+
+      <!-- Tags Tab -->
+      <section id="tab-tags" class="tab-content">
+        <div class="setting-group">
+          <label class="setting-label">Tags</label>
+          <p class="setting-description">Manage tags from your captures</p>
+          <div id="tagsList" class="items-list">
+            <div class="loading">Loading...</div>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">Merge Tags</label>
+          <p class="setting-description">Combine similar tags into one</p>
+          <div class="merge-form">
+            <select id="mergeSource" class="setting-select-sm">
+              <option value="">From...</option>
+            </select>
+            <span class="merge-arrow">&rarr;</span>
+            <select id="mergeTarget" class="setting-select-sm">
+              <option value="">To...</option>
+            </select>
+            <button id="mergeTagsBtn" class="merge-btn">Merge</button>
+          </div>
         </div>
       </section>
 

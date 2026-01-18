@@ -418,3 +418,217 @@ body {
 .usage-stats .stat-value.cost {
   color: #16a34a;
 }
+
+/* Settings Tabs */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e5e5e5;
+  padding-bottom: 8px;
+}
+
+.tab-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: #1a1a2e;
+  background: #f0f0f0;
+}
+
+.tab-btn.active {
+  color: #667eea;
+  background: #f0f4ff;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Items List (Categories/Tags) */
+.items-list {
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.item-row:last-child {
+  border-bottom: none;
+}
+
+.item-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.item-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1a2e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-count {
+  font-size: 11px;
+  color: #999;
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 4px;
+}
+
+.item-default {
+  font-size: 10px;
+  color: #667eea;
+  margin-left: 4px;
+}
+
+.item-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.item-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #666;
+  background: #f5f5f5;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.item-btn:hover {
+  background: #e5e5e5;
+}
+
+.item-btn.delete {
+  color: #dc2626;
+}
+
+.item-btn.delete:hover {
+  background: #fee2e2;
+}
+
+/* Add Form */
+.add-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.setting-input-sm {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  outline: none;
+}
+
+.setting-input-sm:focus {
+  border-color: #667eea;
+}
+
+.color-picker {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.add-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: #10b981;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.add-btn:hover {
+  background: #059669;
+}
+
+/* Merge Form */
+.merge-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setting-select-sm {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.merge-arrow {
+  color: #999;
+  font-size: 14px;
+}
+
+.merge-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: #f59e0b;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.merge-btn:hover {
+  background: #d97706;
+}
+
+/* Empty state */
+.items-list .empty {
+  padding: 16px;
+  text-align: center;
+  color: #999;
+  font-size: 13px;
+}

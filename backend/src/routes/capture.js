@@ -5,6 +5,8 @@ import { isConfigured as isAiConfigured, getModel as getAiModel, clearModelCache
 import { isConfigured as isEmbeddingsConfigured, getModel as getEmbeddingsModel } from '../services/embeddings.js';
 import { getUsageSummary, getTodayUsage } from '../services/usage.js';
 import { getSettingsWithOptions, updateSettings } from '../services/settings.js';
+import { getCategories, addCategory, updateCategory, deleteCategory } from '../services/categories.js';
+import { getTagsWithCounts, deleteTag, mergeTags, renameTag } from '../services/tags.js';
 
 const router = express.Router();
 
@@ -336,6 +338,142 @@ router.put('/settings', async (req, res, next) => {
       message: 'Settings updated',
       ...settings,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============ Categories ============
+
+// GET /api/categories - Get all categories
+router.get('/categories', async (req, res, next) => {
+  try {
+    const categories = await getCategories();
+    res.json({
+      success: true,
+      categories,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/categories - Add a new category
+router.post('/categories', async (req, res, next) => {
+  try {
+    const { name, description, color } = req.body;
+
+    const result = await addCategory({ name, description, color });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/categories/:id - Update a category
+router.put('/categories/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { name, description, color } = req.body;
+
+    const result = await updateCategory(id, { name, description, color });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/categories/:id - Delete a category
+router.delete('/categories/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const result = await deleteCategory(id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============ Tags ============
+
+// GET /api/tags - Get all tags with counts
+router.get('/tags', async (req, res, next) => {
+  try {
+    const result = await getTagsWithCounts();
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/tags/:name - Delete a tag from all captures
+router.delete('/tags/:name', async (req, res, next) => {
+  try {
+    const { name } = req.params;
+
+    const result = await deleteTag(name);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tags/merge - Merge one tag into another
+router.post('/tags/merge', async (req, res, next) => {
+  try {
+    const { source, target } = req.body;
+
+    const result = await mergeTags(source, target);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/tags/:name - Rename a tag
+router.put('/tags/:name', async (req, res, next) => {
+  try {
+    const { name } = req.params;
+    const { newName } = req.body;
+
+    const result = await renameTag(name, newName);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
   } catch (error) {
     next(error);
   }

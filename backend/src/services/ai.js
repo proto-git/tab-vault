@@ -4,6 +4,7 @@
 import { recordUsage } from './usage.js';
 import { getSelectedModelConfig } from './settings.js';
 import { DEFAULT_MODEL, getModelConfig } from '../config/models.js';
+import { getCategoryPrompt } from './categories.js';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -135,14 +136,13 @@ Provide a 2-3 sentence summary:`;
  * @returns {Promise<{category: string, tags: string[]}>}
  */
 export async function categorize(title, content, captureId = null) {
+  // Get dynamic categories from database
+  const categoryList = await getCategoryPrompt();
+
   const systemPrompt = `You categorize web content. Respond with JSON only, no other text.
 
 Categories (pick one):
-- learning: tutorials, courses, documentation, how-to guides
-- work: professional tools, productivity, career-related
-- project: code repos, project ideas, side projects
-- news: current events, announcements, blog posts
-- reference: APIs, specs, reference materials, wikis
+${categoryList}
 
 Tags: Generate 2-4 relevant lowercase tags.
 

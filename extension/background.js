@@ -47,6 +47,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     getUsage().then(sendResponse);
     return true;
   }
+  if (request.action === 'getCategories') {
+    getCategories().then(sendResponse);
+    return true;
+  }
+  if (request.action === 'addCategory') {
+    addCategory(request.category).then(sendResponse);
+    return true;
+  }
+  if (request.action === 'deleteCategory') {
+    deleteCategory(request.id).then(sendResponse);
+    return true;
+  }
+  if (request.action === 'getTags') {
+    getTags().then(sendResponse);
+    return true;
+  }
+  if (request.action === 'deleteTag') {
+    deleteTag(request.name).then(sendResponse);
+    return true;
+  }
+  if (request.action === 'mergeTags') {
+    mergeTags(request.source, request.target).then(sendResponse);
+    return true;
+  }
 });
 
 // Capture the current tab
@@ -175,6 +199,102 @@ async function getUsage() {
     return await response.json();
   } catch (error) {
     console.error('Failed to get usage:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Get categories
+async function getCategories() {
+  try {
+    const response = await fetch(`${API_URL}/categories`);
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to get categories:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Add category
+async function addCategory(category) {
+  try {
+    const response = await fetch(`${API_URL}/categories`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(category)
+    });
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to add category:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Delete category
+async function deleteCategory(id) {
+  try {
+    const response = await fetch(`${API_URL}/categories/${id}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to delete category:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Get tags
+async function getTags() {
+  try {
+    const response = await fetch(`${API_URL}/tags`);
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to get tags:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Delete tag
+async function deleteTag(name) {
+  try {
+    const response = await fetch(`${API_URL}/tags/${encodeURIComponent(name)}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to delete tag:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Merge tags
+async function mergeTags(source, target) {
+  try {
+    const response = await fetch(`${API_URL}/tags/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, target })
+    });
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to merge tags:', error);
     return { success: false, error: error.message };
   }
 }
