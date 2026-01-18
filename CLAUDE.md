@@ -106,8 +106,31 @@ Always use TodoWrite for multi-step tasks. This helps:
 
 ## Future Ideas (Cross-Project)
 
-Capture ideas here that belong in a global "tech-debt" or "tooling" Linear project:
+Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech-debt-a1ff70e7896c
 
-- [ ] **Global Claude tooling**: User-scope hooks, CLAUDE.md templates, reusable skills/agents that bootstrap new projects
-- [ ] **Context tracking hook**: `Stop` hook that feeds transcript size/message count back for pre-task compaction decisions
-- [ ] **Project bootstrap script**: Initialize new projects with standard hooks, CLAUDE.md template, Linear integration
+- **ALU-18**: Global Claude tooling - user-scope hooks, templates, skills
+- **ALU-19**: Context tracking hook for pre-task compaction decisions
+- **ALU-20**: Project bootstrap script with standard Claude setup
+
+---
+
+## Current Status (Jan 18, 2026)
+
+**Completed features:**
+- Phase 1: Chrome extension + Express backend + Supabase
+- Phase 2: AI pipeline (scrape → summarize → categorize → tag → embed)
+- ALU-15: Cost tracking with usage dashboard
+- ALU-16: Model selection (Claude Haiku, Sonnet, GPT-4o-mini)
+- ALU-17: Category & tag management with custom categories
+- Semantic search using pgvector (threshold: 0.4)
+
+**Known issues:**
+- Old captures (before Phase 2) don't have embeddings
+- Check: `SELECT * FROM captures WHERE embedding IS NULL`
+- Fix: Reprocess individually via `POST /api/reprocess/:id`
+
+**Potential next features:**
+- Backfill embeddings endpoint (batch reprocess captures without embeddings)
+- Frontend dashboard (full-page search UI with filters)
+- Auto-capture rules (capture tabs matching URL patterns)
+- Notion sync (Phase 4 - schema already has fields for this)
