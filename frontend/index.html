@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tab Vault</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Dark warm palette (default) */
+      --bg-deep: #0d0d0f;
+      --bg-surface: #16161a;
+      --bg-elevated: #1e1e24;
+      --bg-hover: #26262e;
+
+      /* Text */
+      --text-primary: #fffaf0;
+      --text-secondary: #a0998a;
+      --text-muted: #6b6560;
+
+      /* Accent - warm amber */
+      --accent: #e8a849;
+      --accent-soft: rgba(232, 168, 73, 0.15);
+      --accent-glow: rgba(232, 168, 73, 0.4);
+
+      /* Category colors */
+      --cat-learning: #16a34a;
+      --cat-work: #2563eb;
+      --cat-project: #7c3aed;
+      --cat-news: #ea580c;
+      --cat-reference: #64748b;
+
+      /* Border */
+      --border-subtle: rgba(255, 250, 240, 0.06);
+      --border-medium: rgba(255, 250, 240, 0.12);
+
+      /* Shadows */
+      --shadow-card: 0 12px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Light mode */
+    [data-theme="light"] {
+      --bg-deep: #f8f6f3;
+      --bg-surface: #ffffff;
+      --bg-elevated: #f0ede8;
+      --bg-hover: #e8e4dd;
+
+      --text-primary: #1a1a1a;
+      --text-secondary: #5c5c5c;
+      --text-muted: #8c8c8c;
+
+      --accent: #c4850c;
+      --accent-soft: rgba(196, 133, 12, 0.12);
+      --accent-glow: rgba(196, 133, 12, 0.3);
+
+      --border-subtle: rgba(0, 0, 0, 0.06);
+      --border-medium: rgba(0, 0, 0, 0.12);
+
+      --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.08);
+    }
+
+    [data-theme="light"] body::before {
+      opacity: 0.015;
+    }
+
+    :root {
+      /* Spacing */
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 16px;
+      --space-lg: 24px;
+      --space-xl: 40px;
+      --space-2xl: 64px;
+
+      /* Typography */
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-body: 'DM Sans', -apple-system, sans-serif;
+
+      /* Transitions */
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --duration-fast: 150ms;
+      --duration-normal: 300ms;
+      --duration-slow: 500ms;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* Noise texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* Layout */
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-subtle);
+      padding: var(--space-xl);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xl);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent) 0%, #d4922a 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .logo-text {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+
+    /* Theme toggle */
+    .theme-toggle {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: var(--space-sm) var(--space-md);
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .theme-toggle:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .theme-icon {
+      font-size: 1rem;
+    }
+
+    /* Navigation */
+    .nav-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+    }
+
+    .nav-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      padding: 0 var(--space-sm);
+      margin-bottom: var(--space-xs);
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      padding: var(--space-sm) var(--space-md);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .nav-item.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .nav-item-count {
+      margin-left: auto;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      background: var(--bg-elevated);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    /* Category indicators */
+    .category-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .category-dot.learning { background: var(--cat-learning); }
+    .category-dot.work { background: var(--cat-work); }
+    .category-dot.project { background: var(--cat-project); }
+    .category-dot.news { background: var(--cat-news); }
+    .category-dot.reference { background: var(--cat-reference); }
+
+    /* Stats card */
+    .stats-card {
+      background: var(--bg-elevated);
+      border-radius: 12px;
+      padding: var(--space-lg);
+      margin-top: auto;
+    }
+
+    .stats-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: var(--space-md);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-md);
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .stat-value {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Main content */
+    .main {
+      padding: var(--space-2xl);
+      max-width: 1200px;
+    }
+
+    /* Search hero */
+    .search-hero {
+      margin-bottom: var(--space-2xl);
+    }
+
+    .search-tagline {
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      font-style: italic;
+      color: var(--text-muted);
+      margin-bottom: var(--space-md);
+    }
+
+    .search-container {
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: var(--space-lg) var(--space-xl);
+      padding-left: 60px;
+      font-family: var(--font-body);
+      font-size: 1.25rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      color: var(--text-primary);
+      outline: none;
+      transition: all var(--duration-normal) var(--ease-out);
+    }
+
+    .search-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .search-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-soft), 0 8px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: var(--space-lg);
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 1.25rem;
+      transition: color var(--duration-fast) var(--ease-out);
+    }
+
+    .search-input:focus + .search-icon {
+      color: var(--accent);
+    }
+
+    .search-hint {
+      display: flex;
+      align-items: center;
+      gap: var(--space-lg);
+      margin-top: var(--space-md);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .search-hint kbd {
+      background: var(--bg-elevated);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: var(--font-body);
+      font-size: 0.75rem;
+      border: 1px solid var(--border-medium);
+    }
+
+    /* Results header */
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-lg);
+    }
+
+    .results-title {
+      font-family: var(--font-display);
+      font-size: 1.75rem;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+
+    .results-count {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .results-sort {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+
+    .sort-btn {
+      padding: var(--space-sm) var(--space-md);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .sort-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .sort-btn.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Captures grid */
+    .captures-grid {
+      display: grid;
+      gap: var(--space-md);
+    }
+
+    /* Capture card */
+    .capture-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: var(--space-lg);
+      cursor: pointer;
+      transition: all var(--duration-normal) var(--ease-out);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .capture-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--card-accent, var(--text-muted));
+      opacity: 0.6;
+      transition: opacity var(--duration-fast) var(--ease-out);
+    }
+
+    .capture-card:hover {
+      border-color: var(--border-medium);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-card);
+    }
+
+    .capture-card:hover::before {
+      opacity: 1;
+    }
+
+    .capture-card.learning { --card-accent: var(--cat-learning); }
+    .capture-card.work { --card-accent: var(--cat-work); }
+    .capture-card.project { --card-accent: var(--cat-project); }
+    .capture-card.news { --card-accent: var(--cat-news); }
+    .capture-card.reference { --card-accent: var(--cat-reference); }
+
+    .capture-header {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-md);
+      margin-bottom: var(--space-md);
+    }
+
+    .capture-favicon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--bg-elevated);
+      flex-shrink: 0;
+      object-fit: contain;
+    }
+
+    .capture-title {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 500;
+      line-height: 1.4;
+      color: var(--text-primary);
+      flex: 1;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .capture-summary {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: var(--space-md);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .capture-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      flex-wrap: wrap;
+    }
+
+    .capture-category {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--accent-soft);
+      color: var(--card-accent, var(--accent));
+    }
+
+    .capture-tags {
+      display: flex;
+      gap: var(--space-xs);
+      flex-wrap: wrap;
+    }
+
+    .capture-tag {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      background: var(--bg-elevated);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .capture-date {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+
+    .capture-quality {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.8rem;
+      color: var(--accent);
+    }
+
+    /* Loading state */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-2xl);
+      color: var(--text-muted);
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--bg-elevated);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: var(--space-2xl);
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: var(--space-md);
+      opacity: 0.5;
+    }
+
+    .empty-state-title {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      color: var(--text-secondary);
+      margin-bottom: var(--space-sm);
+    }
+
+    /* Card animations */
+    @keyframes cardAppear {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .capture-card {
+      animation: cardAppear var(--duration-slow) var(--ease-out) backwards;
+    }
+
+    .capture-card:nth-child(1) { animation-delay: 0ms; }
+    .capture-card:nth-child(2) { animation-delay: 50ms; }
+    .capture-card:nth-child(3) { animation-delay: 100ms; }
+    .capture-card:nth-child(4) { animation-delay: 150ms; }
+    .capture-card:nth-child(5) { animation-delay: 200ms; }
+    .capture-card:nth-child(6) { animation-delay: 250ms; }
+    .capture-card:nth-child(7) { animation-delay: 300ms; }
+    .capture-card:nth-child(8) { animation-delay: 350ms; }
+    .capture-card:nth-child(9) { animation-delay: 400ms; }
+    .capture-card:nth-child(10) { animation-delay: 450ms; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      visibility: hidden;
+      transition: all var(--duration-normal) var(--ease-out);
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-medium);
+      border-radius: 20px;
+      width: 90%;
+      max-width: 700px;
+      max-height: 85vh;
+      overflow-y: auto;
+      transform: scale(0.95) translateY(20px);
+      transition: transform var(--duration-normal) var(--ease-out);
+    }
+
+    .modal-overlay.active .modal {
+      transform: scale(1) translateY(0);
+    }
+
+    .modal-header {
+      padding: var(--space-xl);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-md);
+    }
+
+    .modal-favicon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--bg-elevated);
+    }
+
+    .modal-title-section {
+      flex: 1;
+    }
+
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 500;
+      line-height: 1.3;
+      margin-bottom: var(--space-sm);
+    }
+
+    .modal-url {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+
+    .modal-url a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .modal-url a:hover {
+      text-decoration: underline;
+    }
+
+    .modal-close {
+      background: var(--bg-elevated);
+      border: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .modal-close:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      padding: var(--space-xl);
+    }
+
+    .modal-section {
+      margin-bottom: var(--space-xl);
+    }
+
+    .modal-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .modal-section-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: var(--space-sm);
+    }
+
+    .modal-summary {
+      font-size: 1rem;
+      line-height: 1.7;
+      color: var(--text-primary);
+    }
+
+    .modal-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+    }
+
+    .modal-tag {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    .modal-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-md);
+    }
+
+    .modal-stat {
+      background: var(--bg-elevated);
+      padding: var(--space-md);
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    .modal-stat-value {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .modal-stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: var(--space-md);
+      padding: var(--space-xl);
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .modal-btn {
+      flex: 1;
+      padding: var(--space-md) var(--space-lg);
+      border-radius: 10px;
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+      border: none;
+    }
+
+    .modal-btn-primary {
+      background: var(--accent);
+      color: var(--bg-deep);
+    }
+
+    .modal-btn-primary:hover {
+      background: #f0b85a;
+      transform: translateY(-1px);
+    }
+
+    .modal-btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-medium);
+    }
+
+    .modal-btn-secondary:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .modal-btn-danger {
+      background: transparent;
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .modal-btn-danger:hover {
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .main {
+        padding: var(--space-lg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">V</div>
+        <span class="logo-text">Tab Vault</span>
+      </div>
+
+      <button class="theme-toggle" id="themeToggle">
+        <span class="theme-icon" id="themeIcon">&#9790;</span>
+        <span id="themeLabel">Light mode</span>
+      </button>
+
+      <nav class="nav-section">
+        <span class="nav-label">Browse</span>
+        <button class="nav-item active" data-filter="all">
+          <span>All Captures</span>
+          <span class="nav-item-count" id="countAll">-</span>
+        </button>
+      </nav>
+
+      <nav class="nav-section">
+        <span class="nav-label">Categories</span>
+        <button class="nav-item" data-filter="learning">
+          <span class="category-dot learning"></span>
+          <span>Learning</span>
+          <span class="nav-item-count" id="countLearning">-</span>
+        </button>
+        <button class="nav-item" data-filter="work">
+          <span class="category-dot work"></span>
+          <span>Work</span>
+          <span class="nav-item-count" id="countWork">-</span>
+        </button>
+        <button class="nav-item" data-filter="project">
+          <span class="category-dot project"></span>
+          <span>Project</span>
+          <span class="nav-item-count" id="countProject">-</span>
+        </button>
+        <button class="nav-item" data-filter="news">
+          <span class="category-dot news"></span>
+          <span>News</span>
+          <span class="nav-item-count" id="countNews">-</span>
+        </button>
+        <button class="nav-item" data-filter="reference">
+          <span class="category-dot reference"></span>
+          <span>Reference</span>
+          <span class="nav-item-count" id="countReference">-</span>
+        </button>
+      </nav>
+
+      <div class="stats-card">
+        <div class="stats-title">Today's Usage</div>
+        <div class="stats-grid">
+          <div class="stat">
+            <span class="stat-value" id="statRequests">-</span>
+            <span class="stat-label">Requests</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="statCost">-</span>
+            <span class="stat-label">Cost</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <!-- Search hero -->
+      <section class="search-hero">
+        <p class="search-tagline">Search your captured knowledge...</p>
+        <div class="search-container">
+          <input
+            type="text"
+            class="search-input"
+            id="searchInput"
+            placeholder="What are you looking for?"
+            autocomplete="off"
+          >
+          <span class="search-icon">&#128269;</span>
+        </div>
+        <div class="search-hint">
+          <span><kbd>Enter</kbd> to search</span>
+          <span>Semantic search finds related concepts</span>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section class="results-section">
+        <div class="results-header">
+          <div>
+            <h2 class="results-title" id="resultsTitle">Recent Captures</h2>
+            <span class="results-count" id="resultsCount"></span>
+          </div>
+          <div class="results-sort">
+            <button class="sort-btn active" data-sort="recent">Recent</button>
+            <button class="sort-btn" data-sort="quality">Top Quality</button>
+          </div>
+        </div>
+
+        <div class="captures-grid" id="capturesGrid">
+          <div class="loading">
+            <div class="loading-spinner"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <img class="modal-favicon" id="modalFavicon" src="" alt="">
+        <div class="modal-title-section">
+          <h3 class="modal-title" id="modalTitle"></h3>
+          <p class="modal-url"><a href="#" id="modalUrl" target="_blank"></a></p>
+        </div>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section">
+          <div class="modal-section-title">Summary</div>
+          <p class="modal-summary" id="modalSummary"></p>
+        </div>
+        <div class="modal-section" id="modalTagsSection">
+          <div class="modal-section-title">Tags</div>
+          <div class="modal-tags" id="modalTags"></div>
+        </div>
+        <div class="modal-section">
+          <div class="modal-section-title">Stats</div>
+          <div class="modal-stats">
+            <div class="modal-stat">
+              <div class="modal-stat-value" id="modalCategory">-</div>
+              <div class="modal-stat-label">Category</div>
+            </div>
+            <div class="modal-stat">
+              <div class="modal-stat-value" id="modalQuality">-</div>
+              <div class="modal-stat-label">Quality</div>
+            </div>
+            <div class="modal-stat">
+              <div class="modal-stat-value" id="modalDate">-</div>
+              <div class="modal-stat-label">Captured</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-primary" id="modalOpen">Open Page</button>
+        <button class="modal-btn modal-btn-secondary" id="modalReprocess">Reprocess</button>
+        <button class="modal-btn modal-btn-danger" id="modalDelete">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuration
+    const API_URL = 'https://backend-production-49f0.up.railway.app/api';
+
+    // State
+    let captures = [];
+    let currentFilter = 'all';
+    let currentSort = 'recent';
+    let currentCapture = null;
+
+    // DOM Elements
+    const searchInput = document.getElementById('searchInput');
+    const capturesGrid = document.getElementById('capturesGrid');
+    const resultsTitle = document.getElementById('resultsTitle');
+    const resultsCount = document.getElementById('resultsCount');
+    const modalOverlay = document.getElementById('modalOverlay');
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadCaptures();
+      loadUsage();
+      setupEventListeners();
+    });
+
+    function setupEventListeners() {
+      // Search
+      let searchTimeout;
+      searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          const query = e.target.value.trim();
+          if (query) {
+            searchCaptures(query);
+          } else {
+            loadCaptures();
+          }
+        }, 300);
+      });
+
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          clearTimeout(searchTimeout);
+          const query = e.target.value.trim();
+          if (query) {
+            searchCaptures(query);
+          } else {
+            loadCaptures();
+          }
+        }
+      });
+
+      // Filter buttons
+      document.querySelectorAll('[data-filter]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('[data-filter]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentFilter = btn.dataset.filter;
+
+          // Clear search and reload if we were searching
+          if (searchInput.value.trim()) {
+            searchInput.value = '';
+            resultsTitle.textContent = 'Recent Captures';
+            resultsCount.textContent = '';
+            loadCaptures();
+          } else {
+            renderCaptures();
+          }
+        });
+      });
+
+      // Theme toggle
+      const themeToggle = document.getElementById('themeToggle');
+      const themeIcon = document.getElementById('themeIcon');
+      const themeLabel = document.getElementById('themeLabel');
+
+      // Check for saved theme preference
+      const savedTheme = localStorage.getItem('tabvault-theme') || 'dark';
+      if (savedTheme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+        themeIcon.innerHTML = '&#9728;'; // Sun
+        themeLabel.textContent = 'Dark mode';
+      }
+
+      themeToggle.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        if (currentTheme === 'light') {
+          document.documentElement.removeAttribute('data-theme');
+          localStorage.setItem('tabvault-theme', 'dark');
+          themeIcon.innerHTML = '&#9790;'; // Moon
+          themeLabel.textContent = 'Light mode';
+        } else {
+          document.documentElement.setAttribute('data-theme', 'light');
+          localStorage.setItem('tabvault-theme', 'light');
+          themeIcon.innerHTML = '&#9728;'; // Sun
+          themeLabel.textContent = 'Dark mode';
+        }
+      });
+
+      // Sort buttons
+      document.querySelectorAll('[data-sort]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('[data-sort]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentSort = btn.dataset.sort;
+          renderCaptures();
+        });
+      });
+
+      // Modal
+      document.getElementById('modalClose').addEventListener('click', closeModal);
+      modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) closeModal();
+      });
+
+      document.getElementById('modalOpen').addEventListener('click', () => {
+        if (currentCapture) window.open(currentCapture.url, '_blank');
+      });
+
+      document.getElementById('modalReprocess').addEventListener('click', async () => {
+        if (!currentCapture) return;
+        const btn = document.getElementById('modalReprocess');
+        btn.textContent = 'Processing...';
+        btn.disabled = true;
+
+        try {
+          await fetch(`${API_URL}/reprocess/${currentCapture.id}`, { method: 'POST' });
+          await loadCaptures();
+          closeModal();
+        } catch (err) {
+          alert('Failed to reprocess');
+        }
+
+        btn.textContent = 'Reprocess';
+        btn.disabled = false;
+      });
+
+      document.getElementById('modalDelete').addEventListener('click', async () => {
+        if (!currentCapture) return;
+        if (!confirm('Delete this capture?')) return;
+
+        try {
+          await fetch(`${API_URL}/capture/${currentCapture.id}`, { method: 'DELETE' });
+          await loadCaptures();
+          closeModal();
+        } catch (err) {
+          alert('Failed to delete');
+        }
+      });
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+        if (e.key === '/' && document.activeElement !== searchInput) {
+          e.preventDefault();
+          searchInput.focus();
+        }
+      });
+    }
+
+    async function loadCaptures() {
+      showLoading();
+      resultsTitle.textContent = 'Recent Captures';
+
+      try {
+        const response = await fetch(`${API_URL}/recent?limit=50`);
+        const data = await response.json();
+        captures = data.results || [];
+        updateCounts();
+        renderCaptures();
+      } catch (err) {
+        showError('Failed to load captures');
+      }
+    }
+
+    async function searchCaptures(query) {
+      showLoading();
+      resultsTitle.textContent = 'Search Results';
+
+      try {
+        // Try semantic search first
+        const semanticRes = await fetch(`${API_URL}/semantic-search?q=${encodeURIComponent(query)}`);
+        const semanticData = await semanticRes.json();
+
+        if (semanticData.success && semanticData.results?.length > 0) {
+          captures = semanticData.results;
+          resultsCount.textContent = `${captures.length} results (semantic)`;
+        } else {
+          // Fall back to keyword search
+          const keywordRes = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`);
+          const keywordData = await keywordRes.json();
+          captures = keywordData.results || [];
+          resultsCount.textContent = `${captures.length} results (keyword)`;
+        }
+
+        renderCaptures();
+      } catch (err) {
+        showError('Search failed');
+      }
+    }
+
+    async function loadUsage() {
+      try {
+        const response = await fetch(`${API_URL}/usage`);
+        const data = await response.json();
+
+        if (data.today) {
+          document.getElementById('statRequests').textContent = data.today.requests;
+          document.getElementById('statCost').textContent = `$${data.today.cost}`;
+        }
+      } catch (err) {
+        console.error('Failed to load usage');
+      }
+    }
+
+    function updateCounts() {
+      const counts = { all: captures.length };
+
+      captures.forEach(c => {
+        const cat = c.category?.toLowerCase() || 'reference';
+        counts[cat] = (counts[cat] || 0) + 1;
+      });
+
+      document.getElementById('countAll').textContent = counts.all;
+      document.getElementById('countLearning').textContent = counts.learning || 0;
+      document.getElementById('countWork').textContent = counts.work || 0;
+      document.getElementById('countProject').textContent = counts.project || 0;
+      document.getElementById('countNews').textContent = counts.news || 0;
+      document.getElementById('countReference').textContent = counts.reference || 0;
+    }
+
+    function renderCaptures() {
+      let filtered = [...captures];
+
+      // Apply filter
+      if (currentFilter !== 'all') {
+        filtered = filtered.filter(c =>
+          (c.category?.toLowerCase() || 'reference') === currentFilter
+        );
+      }
+
+      // Apply sort
+      if (currentSort === 'quality') {
+        filtered.sort((a, b) => (b.quality_score || 0) - (a.quality_score || 0));
+      } else {
+        filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      }
+
+      if (filtered.length === 0) {
+        capturesGrid.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">&#128194;</div>
+            <div class="empty-state-title">No captures found</div>
+            <p>Try a different search or filter</p>
+          </div>
+        `;
+        return;
+      }
+
+      capturesGrid.innerHTML = filtered.map(capture => {
+        const category = capture.category?.toLowerCase() || 'reference';
+        const tags = capture.tags || [];
+
+        return `
+          <article class="capture-card ${category}" data-id="${capture.id}">
+            <div class="capture-header">
+              ${capture.favicon_url ?
+                `<img class="capture-favicon" src="${capture.favicon_url}" alt="" onerror="this.style.display='none'">` :
+                ''}
+              <h3 class="capture-title">${escapeHtml(capture.title || capture.url)}</h3>
+            </div>
+            ${capture.summary ? `<p class="capture-summary">${escapeHtml(capture.summary)}</p>` : ''}
+            <div class="capture-meta">
+              <span class="capture-category">${category}</span>
+              <div class="capture-tags">
+                ${tags.slice(0, 3).map(tag => `<span class="capture-tag">${escapeHtml(tag)}</span>`).join('')}
+              </div>
+              ${capture.quality_score ? `
+                <span class="capture-quality">
+                  <span>&#9733;</span> ${capture.quality_score}/10
+                </span>
+              ` : ''}
+              <span class="capture-date">${formatDate(capture.created_at)}</span>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      // Add click handlers
+      document.querySelectorAll('.capture-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const id = card.dataset.id;
+          const capture = captures.find(c => c.id === id);
+          if (capture) openModal(capture);
+        });
+      });
+    }
+
+    function openModal(capture) {
+      currentCapture = capture;
+
+      document.getElementById('modalFavicon').src = capture.favicon_url || '';
+      document.getElementById('modalTitle').textContent = capture.title || capture.url;
+      document.getElementById('modalUrl').href = capture.url;
+      document.getElementById('modalUrl').textContent = capture.url;
+      document.getElementById('modalSummary').textContent = capture.summary || 'No summary available';
+      document.getElementById('modalCategory').textContent = capture.category || 'reference';
+      document.getElementById('modalQuality').textContent = capture.quality_score ? `${capture.quality_score}/10` : '-';
+      document.getElementById('modalDate').textContent = formatDate(capture.created_at);
+
+      const tagsContainer = document.getElementById('modalTags');
+      const tagsSection = document.getElementById('modalTagsSection');
+
+      if (capture.tags?.length) {
+        tagsSection.style.display = 'block';
+        tagsContainer.innerHTML = capture.tags.map(tag =>
+          `<span class="modal-tag">${escapeHtml(tag)}</span>`
+        ).join('');
+      } else {
+        tagsSection.style.display = 'none';
+      }
+
+      modalOverlay.classList.add('active');
+    }
+
+    function closeModal() {
+      modalOverlay.classList.remove('active');
+      currentCapture = null;
+    }
+
+    function showLoading() {
+      capturesGrid.innerHTML = `
+        <div class="loading">
+          <div class="loading-spinner"></div>
+        </div>
+      `;
+    }
+
+    function showError(message) {
+      capturesGrid.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">&#9888;</div>
+          <div class="empty-state-title">${message}</div>
+        </div>
+      `;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diff = now - date;
+
+      if (diff < 60000) return 'Just now';
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+      if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
+
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
