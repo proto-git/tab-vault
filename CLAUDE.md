@@ -42,6 +42,7 @@ database/           Supabase (PostgreSQL + pgvector)
 - `POST /api/capture` - Capture a URL
 - `GET /api/search?q=` - Keyword search captures
 - `GET /api/semantic-search?q=` - Vector similarity search (finds conceptually related content)
+- `POST /api/backfill-embeddings?limit=50` - Generate embeddings for old captures
 - `GET /api/recent` - Recent captures
 - `GET/PUT /api/settings` - Model selection
 - `GET/POST/DELETE /api/categories` - Category management
@@ -125,12 +126,11 @@ Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech
 - Semantic search using pgvector (threshold: 0.4)
 
 **Known issues:**
-- Old captures (before Phase 2) don't have embeddings
+- Old captures (before Phase 2) may lack embeddings
 - Check: `SELECT * FROM captures WHERE embedding IS NULL`
-- Fix: Reprocess individually via `POST /api/reprocess/:id`
+- Fix: `POST /api/backfill-embeddings?limit=50` (batch) or `POST /api/reprocess/:id` (individual)
 
 **Potential next features:**
-- Backfill embeddings endpoint (batch reprocess captures without embeddings)
 - Frontend dashboard (full-page search UI with filters)
 - Auto-capture rules (capture tabs matching URL patterns)
 - Notion sync (Phase 4 - schema already has fields for this)

@@ -1,6 +1,6 @@
 import express from 'express';
 import { supabase, isConfigured } from '../services/supabase.js';
-import { processInBackground, processPendingCaptures, processCapture } from '../services/processor.js';
+import { processInBackground, processPendingCaptures, processCapture, backfillEmbeddings } from '../services/processor.js';
 import { isConfigured as isAiConfigured, getModel as getAiModel, clearModelCache } from '../services/ai.js';
 import { isConfigured as isEmbeddingsConfigured, getModel as getEmbeddingsModel, generateQueryEmbedding, formatForPgVector } from '../services/embeddings.js';
 import { getUsageSummary, getTodayUsage } from '../services/usage.js';
@@ -354,6 +354,20 @@ router.post('/reprocess/:id', async (req, res, next) => {
     const { id } = req.params;
     const result = await processCapture(id);
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/backfill-embeddings - Generate embeddings for captures that don't have them
+router.post('/backfill-embeddings', async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const result = await backfillEmbeddings(limit);
+    res.json({
+      success: !result.error,
+      ...result,
+    });
   } catch (error) {
     next(error);
   }

@@ -185,3 +185,77 @@ export async function processPendingCaptures() {
   console.log(`[Processor] Batch complete: ${processed} processed, ${failed} failed`);
   return { processed, failed };
 }
+
+/**
+ * Backfill embeddings for captures that don't have them
+ * Only generates embeddings - doesn't re-run AI processing
+ * @param {number} limit - Max captures to process (default 50)
+ * @returns {Promise<{processed: number, failed: number, remaining: number}>}
+ */
+export async function backfillEmbeddings(limit = 50) {
+  if (!isSupabaseConfigured()) {
+    return { processed: 0, failed: 0, remaining: 0, error: 'Supabase not configured' };
+  }
+
+  if (!isEmbeddingsConfigured()) {
+    return { processed: 0, failed: 0, remaining: 0, error: 'Embeddings not configured' };
+  }
+
+  // Find captures without embeddings that have been processed
+  const { data: captures, error: fetchError } = await supabase
+    .from('captures')
+    .select('id, title, summary, category, tags, content')
+    .is('embedding', null)
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (fetchError) {
+    console.error('[Backfill] Failed to fetch captures:', fetchError.message);
+    return { processed: 0, failed: 0, remaining: 0, error: fetchError.message };
+  }
+
+  if (!captures || captures.length === 0) {
+    console.log('[Backfill] No captures need embeddings');
+    return { processed: 0, failed: 0, remaining: 0 };
+  }
+
+  console.log(`[Backfill] Found ${captures.length} captures without embeddings`);
+
+  let processed = 0;
+  let failed = 0;
+
+  for (const capture of captures) {
+    try {
+      console.log(`[Backfill] Generating embedding for: ${capture.title || capture.id}`);
+
+      const embedding = await generateCaptureEmbedding(capture);
+      const vectorString = formatForPgVector(embedding);
+
+      const { error: updateError } = await supabase
+        .from('captures')
+        .update({ embedding: vectorString })
+        .eq('id', capture.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      processed++;
+      console.log(`[Backfill] Embedded: ${capture.id}`);
+    } catch (err) {
+      console.error(`[Backfill] Failed for ${capture.id}:`, err.message);
+      failed++;
+    }
+  }
+
+  // Check how many remain
+  const { count: remaining } = await supabase
+    .from('captures')
+    .select('id', { count: 'exact', head: true })
+    .is('embedding', null)
+    .eq('status', 'completed');
+
+  console.log(`[Backfill] Complete: ${processed} processed, ${failed} failed, ${remaining || 0} remaining`);
+  return { processed, failed, remaining: remaining || 0 };
+}
