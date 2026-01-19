@@ -1284,7 +1284,7 @@
               ${capture.favicon_url ?
                 `<img class="capture-favicon" src="${capture.favicon_url}" alt="" onerror="this.style.display='none'">` :
                 ''}
-              <h3 class="capture-title">${escapeHtml(capture.title || capture.url)}</h3>
+              <h3 class="capture-title">${escapeHtml(capture.display_title || capture.title || capture.url)}</h3>
             </div>
             ${capture.summary ? `<p class="capture-summary">${escapeHtml(capture.summary)}</p>` : ''}
             <div class="capture-meta">
@@ -1323,9 +1323,9 @@
       } else {
         modalFavicon.style.display = 'none';
       }
-      document.getElementById('modalTitle').textContent = capture.title || capture.url;
+      document.getElementById('modalTitle').textContent = capture.display_title || capture.title || capture.url;
       document.getElementById('modalUrl').href = capture.url;
-      document.getElementById('modalUrl').textContent = capture.url;
+      document.getElementById('modalUrl').textContent = shortenUrl(capture.url);
       document.getElementById('modalSummary').textContent = capture.summary || 'No summary available';
       document.getElementById('modalCategory').textContent = capture.category || 'reference';
       document.getElementById('modalQuality').textContent = capture.quality_score ? `${capture.quality_score}/10` : '-';
@@ -1387,6 +1387,33 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    function shortenUrl(url, maxLength = 60) {
+      if (!url) return '';
+      try {
+        const parsed = new URL(url);
+        const domain = parsed.hostname.replace('www.', '');
+        const path = parsed.pathname;
+
+        // If just domain fits, show domain + truncated path
+        const base = domain + path;
+        if (base.length <= maxLength) {
+          return base;
+        }
+
+        // Truncate path
+        const availableForPath = maxLength - domain.length - 3; // 3 for "..."
+        if (availableForPath > 10) {
+          return domain + path.slice(0, availableForPath) + '...';
+        }
+
+        // Just show domain
+        return domain + '/...';
+      } catch {
+        // If URL parsing fails, just truncate
+        return url.length > maxLength ? url.slice(0, maxLength) + '...' : url;
+      }
     }
   </script>
 </body>

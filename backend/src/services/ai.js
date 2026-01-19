@@ -220,17 +220,56 @@ Rate this content:`;
 }
 
 /**
+ * Generate a clean display title
+ * @param {string} title - Original page title
+ * @param {string} content - Page content (for context)
+ * @param {string|null} captureId - Capture ID for usage tracking
+ * @returns {Promise<string>} - Clean display title
+ */
+export async function generateDisplayTitle(title, content, captureId = null) {
+  const systemPrompt = `You create concise, descriptive titles. Your task:
+1. Create a clean, readable title (max 80 characters)
+2. Remove platform prefixes (like "X:", "YouTube -", etc.)
+3. Remove URLs from the title
+4. Capture the essence of the content
+5. If the original title is already clean and under 80 chars, return it as-is
+
+Return ONLY the title, no quotes or explanation.`;
+
+  const userPrompt = `Original title: ${title}
+
+Content preview:
+${content.slice(0, 1000)}
+
+Generate a clean title:`;
+
+  const response = await callOpenRouter(systemPrompt, userPrompt, 'title', captureId);
+
+  // Clean up the response (remove quotes if present)
+  let cleanTitle = response.content.trim();
+  cleanTitle = cleanTitle.replace(/^["']|["']$/g, '');
+
+  // Ensure max length
+  if (cleanTitle.length > 80) {
+    cleanTitle = cleanTitle.slice(0, 77) + '...';
+  }
+
+  return cleanTitle;
+}
+
+/**
  * Process content through all AI steps
  * @param {string} title - Page title
  * @param {string} content - Page content
  * @param {string|null} captureId - Capture ID for usage tracking
- * @returns {Promise<{summary: string, category: string, tags: string[], quality: number, actionability: number}>}
+ * @returns {Promise<{summary: string, category: string, tags: string[], quality: number, actionability: number, displayTitle: string}>}
  */
 export async function processContent(title, content, captureId = null) {
-  // Run summarize and categorize in parallel
-  const [summary, categoryResult] = await Promise.all([
+  // Run summarize, categorize, and title generation in parallel
+  const [summary, categoryResult, displayTitle] = await Promise.all([
     summarize(title, content, captureId),
     categorize(title, content, captureId),
+    generateDisplayTitle(title, content, captureId),
   ]);
 
   // Score based on summary
@@ -242,5 +281,6 @@ export async function processContent(title, content, captureId = null) {
     tags: categoryResult.tags,
     quality: scores.quality,
     actionability: scores.actionability,
+    displayTitle,
   };
 }

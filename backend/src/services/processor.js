@@ -3,7 +3,7 @@
 
 import { supabase, isConfigured as isSupabaseConfigured } from './supabase.js';
 import { scrapeUrl, isScrapeable } from './scraper.js';
-import { processContent, isConfigured as isAiConfigured } from './ai.js';
+import { processContent, generateDisplayTitle, isConfigured as isAiConfigured } from './ai.js';
 import { generateCaptureEmbedding, formatForPgVector, isConfigured as isEmbeddingsConfigured } from './embeddings.js';
 
 /**
@@ -70,6 +70,7 @@ export async function processCapture(captureId) {
         updates.tags = aiResult.tags;
         updates.quality_score = aiResult.quality;
         updates.actionability_score = aiResult.actionability;
+        updates.display_title = aiResult.displayTitle;
 
         console.log(`[Processor] AI complete: ${aiResult.category}, quality=${aiResult.quality}`);
       } catch (aiError) {
@@ -257,5 +258,82 @@ export async function backfillEmbeddings(limit = 50) {
     .eq('status', 'completed');
 
   console.log(`[Backfill] Complete: ${processed} processed, ${failed} failed, ${remaining || 0} remaining`);
+  return { processed, failed, remaining: remaining || 0 };
+}
+
+/**
+ * Backfill display titles for captures that don't have them
+ * Only generates titles - doesn't re-run full AI processing
+ * @param {number} limit - Max captures to process (default 50)
+ * @returns {Promise<{processed: number, failed: number, remaining: number}>}
+ */
+export async function backfillDisplayTitles(limit = 50) {
+  if (!isSupabaseConfigured()) {
+    return { processed: 0, failed: 0, remaining: 0, error: 'Supabase not configured' };
+  }
+
+  if (!isAiConfigured()) {
+    return { processed: 0, failed: 0, remaining: 0, error: 'AI not configured' };
+  }
+
+  // Find captures without display_title that have been processed
+  const { data: captures, error: fetchError } = await supabase
+    .from('captures')
+    .select('id, title, content')
+    .is('display_title', null)
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (fetchError) {
+    console.error('[BackfillTitles] Failed to fetch captures:', fetchError.message);
+    return { processed: 0, failed: 0, remaining: 0, error: fetchError.message };
+  }
+
+  if (!captures || captures.length === 0) {
+    console.log('[BackfillTitles] No captures need display titles');
+    return { processed: 0, failed: 0, remaining: 0 };
+  }
+
+  console.log(`[BackfillTitles] Found ${captures.length} captures without display titles`);
+
+  let processed = 0;
+  let failed = 0;
+
+  for (const capture of captures) {
+    try {
+      console.log(`[BackfillTitles] Generating title for: ${capture.title || capture.id}`);
+
+      const displayTitle = await generateDisplayTitle(
+        capture.title || '',
+        capture.content || '',
+        capture.id
+      );
+
+      const { error: updateError } = await supabase
+        .from('captures')
+        .update({ display_title: displayTitle })
+        .eq('id', capture.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      processed++;
+      console.log(`[BackfillTitles] Generated: "${displayTitle}"`);
+    } catch (err) {
+      console.error(`[BackfillTitles] Failed for ${capture.id}:`, err.message);
+      failed++;
+    }
+  }
+
+  // Check how many remain
+  const { count: remaining } = await supabase
+    .from('captures')
+    .select('id', { count: 'exact', head: true })
+    .is('display_title', null)
+    .eq('status', 'completed');
+
+  console.log(`[BackfillTitles] Complete: ${processed} processed, ${failed} failed, ${remaining || 0} remaining`);
   return { processed, failed, remaining: remaining || 0 };
 }

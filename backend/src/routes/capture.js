@@ -1,6 +1,6 @@
 import express from 'express';
 import { supabase, isConfigured } from '../services/supabase.js';
-import { processInBackground, processPendingCaptures, processCapture, backfillEmbeddings } from '../services/processor.js';
+import { processInBackground, processPendingCaptures, processCapture, backfillEmbeddings, backfillDisplayTitles } from '../services/processor.js';
 import { isConfigured as isAiConfigured, getModel as getAiModel, clearModelCache } from '../services/ai.js';
 import { isConfigured as isEmbeddingsConfigured, getModel as getEmbeddingsModel, generateQueryEmbedding, formatForPgVector } from '../services/embeddings.js';
 import { getUsageSummary, getTodayUsage } from '../services/usage.js';
@@ -118,7 +118,7 @@ router.get('/search', async (req, res, next) => {
     // Basic text search (Phase 3 will add vector/semantic search)
     const { data, error } = await supabase
       .from('captures')
-      .select('id, url, title, summary, category, quality_score, created_at')
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at')
       .or(`title.ilike.%${query}%,summary.ilike.%${query}%,content.ilike.%${query}%`)
       .order('created_at', { ascending: false })
       .limit(20);
@@ -207,7 +207,7 @@ router.get('/recent', async (req, res, next) => {
 
     const { data, error } = await supabase
       .from('captures')
-      .select('id, url, title, summary, category, quality_score, created_at')
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -364,6 +364,20 @@ router.post('/backfill-embeddings', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const result = await backfillEmbeddings(limit);
+    res.json({
+      success: !result.error,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/backfill-titles - Generate display titles for captures that don't have them
+router.post('/backfill-titles', async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const result = await backfillDisplayTitles(limit);
     res.json({
       success: !result.error,
       ...result,
