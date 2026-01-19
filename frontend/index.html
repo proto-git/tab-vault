@@ -973,7 +973,7 @@
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal" id="modal">
       <div class="modal-header">
-        <img class="modal-favicon" id="modalFavicon" src="" alt="">
+        <img class="modal-favicon" id="modalFavicon" src="" alt="" onerror="this.style.display='none'">
         <div class="modal-title-section">
           <h3 class="modal-title" id="modalTitle"></h3>
           <p class="modal-url"><a href="#" id="modalUrl" target="_blank"></a></p>
@@ -1222,7 +1222,8 @@
 
         if (data.today) {
           document.getElementById('statRequests').textContent = data.today.requests;
-          document.getElementById('statCost').textContent = `$${data.today.cost}`;
+          const cost = parseFloat(data.today.cost) || 0;
+          document.getElementById('statCost').textContent = `$${cost.toFixed(2)}`;
         }
       } catch (err) {
         console.error('Failed to load usage');
@@ -1315,7 +1316,13 @@
     function openModal(capture) {
       currentCapture = capture;
 
-      document.getElementById('modalFavicon').src = capture.favicon_url || '';
+      const modalFavicon = document.getElementById('modalFavicon');
+      if (capture.favicon_url) {
+        modalFavicon.src = capture.favicon_url;
+        modalFavicon.style.display = 'block';
+      } else {
+        modalFavicon.style.display = 'none';
+      }
       document.getElementById('modalTitle').textContent = capture.title || capture.url;
       document.getElementById('modalUrl').href = capture.url;
       document.getElementById('modalUrl').textContent = capture.url;
