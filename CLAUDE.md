@@ -116,7 +116,7 @@ Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech
 
 ---
 
-## Current Status (Jan 18, 2026)
+## Current Status (Jan 22, 2026)
 
 **Completed features:**
 - Phase 1: Chrome extension + Express backend + Supabase
@@ -125,6 +125,8 @@ Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech
 - ALU-16: Model selection (Claude Haiku, Sonnet, GPT-4o-mini)
 - ALU-17: Category & tag management with custom categories
 - Semantic search using pgvector (threshold: 0.4)
+- ALU-21: Frontend dashboard with search, filters, light/dark mode
+- ALU-22: AI-generated display titles and backfill endpoint
 
 **Known issues:**
 - Old captures may lack embeddings or display_title
@@ -132,7 +134,6 @@ Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech
 - Fix: `POST /api/backfill-embeddings?limit=50` or `POST /api/backfill-titles?limit=50` (batch)
 - Or `POST /api/reprocess/:id` (individual - reruns full AI pipeline)
 
-**Potential next features:**
-- Frontend dashboard (full-page search UI with filters)
-- Auto-capture rules (capture tabs matching URL patterns)
-- Notion sync (Phase 4 - schema already has fields for this)
+**Backlog (in Linear):**
+- ALU-23: Auto-capture rules (capture tabs matching URL patterns)
+- ALU-24: Notion sync (Phase 4 - schema already has fields for this)
