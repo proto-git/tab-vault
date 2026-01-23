@@ -868,16 +868,13 @@
     }
 
     .category-dropdown {
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%);
+      position: fixed;
       background: var(--bg-elevated);
       border: 1px solid var(--border-medium);
       border-radius: 8px;
       padding: 6px;
       min-width: 140px;
-      z-index: 100;
+      z-index: 200;
       box-shadow: var(--shadow-card);
       display: none;
     }
@@ -1313,7 +1310,15 @@
 
       categoryEl.addEventListener('click', (e) => {
         e.stopPropagation();
-        categoryDropdown.classList.toggle('active');
+        const isActive = categoryDropdown.classList.toggle('active');
+
+        // Position dropdown below the category element
+        if (isActive) {
+          const rect = categoryEl.getBoundingClientRect();
+          categoryDropdown.style.top = `${rect.bottom + 4}px`;
+          categoryDropdown.style.left = `${rect.left + rect.width / 2}px`;
+          categoryDropdown.style.transform = 'translateX(-50%)';
+        }
       });
 
       categoryDropdown.addEventListener('click', async (e) => {

@@ -115,7 +115,7 @@ async function callOpenRouter(systemPrompt, userPrompt, operation = 'unknown', c
  * @returns {Promise<string>} - Summary
  */
 export async function summarize(title, content, captureId = null) {
-  const systemPrompt = `You are a concise summarizer. Create a 2-3 sentence summary that captures the key points and value of the content. Focus on what makes this content useful or interesting.`;
+  const systemPrompt = `You are a concise summarizer. Create a 2-3 sentence summary that captures the key points and value of the content. Focus on what makes this content useful or interesting. Return plain text only - do not use markdown formatting, headers, or bullet points.`;
 
   const userPrompt = `Title: ${title}
 
