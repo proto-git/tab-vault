@@ -844,6 +844,178 @@
       background: rgba(239, 68, 68, 0.1);
     }
 
+    /* Editable Category */
+    .category-edit-wrapper {
+      position: relative;
+    }
+
+    .modal-stat-value.editable {
+      cursor: pointer;
+      padding: 4px 8px;
+      margin: -4px -8px;
+      border-radius: 6px;
+      transition: background var(--duration-fast);
+    }
+
+    .modal-stat-value.editable:hover {
+      background: var(--bg-hover);
+    }
+
+    .modal-stat-value.editable::after {
+      content: ' ▾';
+      font-size: 0.7em;
+      opacity: 0.5;
+    }
+
+    .category-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-medium);
+      border-radius: 8px;
+      padding: 6px;
+      min-width: 140px;
+      z-index: 100;
+      box-shadow: var(--shadow-card);
+      display: none;
+    }
+
+    .category-dropdown.active {
+      display: block;
+    }
+
+    .category-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--text-primary);
+      transition: background var(--duration-fast);
+    }
+
+    .category-option:hover {
+      background: var(--bg-hover);
+    }
+
+    .category-option.selected {
+      background: var(--accent-soft);
+    }
+
+    .category-option-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* Editable Tags */
+    .modal-tags-editable {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .modal-tag-editable {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: var(--bg-elevated);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .modal-tag-remove {
+      cursor: pointer;
+      opacity: 0.5;
+      font-size: 1.1em;
+      line-height: 1;
+      transition: opacity var(--duration-fast);
+    }
+
+    .modal-tag-remove:hover {
+      opacity: 1;
+      color: #ef4444;
+    }
+
+    .tag-input-wrapper {
+      position: relative;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .tag-input {
+      width: 100%;
+      padding: 6px 10px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-medium);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+      outline: none;
+      font-family: var(--font-body);
+    }
+
+    .tag-input:focus {
+      border-color: var(--accent);
+    }
+
+    .tag-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .tag-suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-medium);
+      border-radius: 6px;
+      margin-top: 4px;
+      max-height: 150px;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: var(--shadow-card);
+      display: none;
+    }
+
+    .tag-suggestions.active {
+      display: block;
+    }
+
+    .tag-suggestion {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      transition: background var(--duration-fast);
+    }
+
+    .tag-suggestion:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .edit-status {
+      font-size: 0.75rem;
+      color: var(--accent);
+      margin-top: 8px;
+      opacity: 0;
+      transition: opacity var(--duration-fast);
+    }
+
+    .edit-status.visible {
+      opacity: 1;
+    }
+
     /* Responsive */
     @media (max-width: 900px) {
       .app {
@@ -986,15 +1158,17 @@
           <p class="modal-summary" id="modalSummary"></p>
         </div>
         <div class="modal-section" id="modalTagsSection">
-          <div class="modal-section-title">Tags</div>
-          <div class="modal-tags" id="modalTags"></div>
+          <div class="modal-section-title">Tags <span style="font-weight: normal; opacity: 0.5; font-size: 0.8em;">(click to edit)</span></div>
+          <div class="modal-tags-editable" id="modalTags"></div>
+          <div class="edit-status" id="tagEditStatus">Saved!</div>
         </div>
         <div class="modal-section">
           <div class="modal-section-title">Stats</div>
           <div class="modal-stats">
-            <div class="modal-stat">
-              <div class="modal-stat-value" id="modalCategory">-</div>
-              <div class="modal-stat-label">Category</div>
+            <div class="modal-stat category-edit-wrapper">
+              <div class="modal-stat-value editable" id="modalCategory">-</div>
+              <div class="modal-stat-label">Category <span style="opacity: 0.5; font-size: 0.9em;">(click)</span></div>
+              <div class="category-dropdown" id="categoryDropdown"></div>
             </div>
             <div class="modal-stat">
               <div class="modal-stat-value" id="modalQuality">-</div>
@@ -1024,6 +1198,8 @@
     let currentFilter = 'all';
     let currentSort = 'recent';
     let currentCapture = null;
+    let allCategories = [];
+    let allTags = [];
 
     // DOM Elements
     const searchInput = document.getElementById('searchInput');
@@ -1036,6 +1212,8 @@
     document.addEventListener('DOMContentLoaded', () => {
       loadCaptures();
       loadUsage();
+      loadCategories();
+      loadAllTags();
       setupEventListeners();
     });
 
@@ -1127,6 +1305,47 @@
       document.getElementById('modalClose').addEventListener('click', closeModal);
       modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay) closeModal();
+      });
+
+      // Category dropdown
+      const categoryEl = document.getElementById('modalCategory');
+      const categoryDropdown = document.getElementById('categoryDropdown');
+
+      categoryEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        categoryDropdown.classList.toggle('active');
+      });
+
+      categoryDropdown.addEventListener('click', async (e) => {
+        const option = e.target.closest('.category-option');
+        if (!option || !currentCapture) return;
+
+        const newCategory = option.dataset.category;
+        if (newCategory === currentCapture.category) {
+          categoryDropdown.classList.remove('active');
+          return;
+        }
+
+        const result = await updateCapture(currentCapture.id, { category: newCategory });
+        if (result.success) {
+          currentCapture.category = newCategory;
+          categoryEl.textContent = newCategory;
+
+          // Update dropdown selection
+          categoryDropdown.querySelectorAll('.category-option').forEach(opt => {
+            opt.classList.toggle('selected', opt.dataset.category === newCategory);
+          });
+
+          renderCaptures(); // Update cards
+          categoryDropdown.classList.remove('active');
+        }
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.category-edit-wrapper')) {
+          categoryDropdown.classList.remove('active');
+        }
       });
 
       document.getElementById('modalOpen').addEventListener('click', () => {
@@ -1230,6 +1449,57 @@
       }
     }
 
+    async function loadCategories() {
+      try {
+        const response = await fetch(`${API_URL}/categories`);
+        const data = await response.json();
+        if (data.success) {
+          allCategories = data.categories;
+        }
+      } catch (err) {
+        console.error('Failed to load categories');
+      }
+    }
+
+    async function loadAllTags() {
+      try {
+        const response = await fetch(`${API_URL}/tags`);
+        const data = await response.json();
+        if (data.success) {
+          allTags = data.tags.map(t => t.name);
+        }
+      } catch (err) {
+        console.error('Failed to load tags');
+      }
+    }
+
+    async function updateCapture(id, updates) {
+      try {
+        const response = await fetch(`${API_URL}/captures/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          // Update local state
+          const index = captures.findIndex(c => c.id === id);
+          if (index !== -1) {
+            captures[index] = { ...captures[index], ...data.data };
+          }
+          if (currentCapture && currentCapture.id === id) {
+            currentCapture = { ...currentCapture, ...data.data };
+          }
+          return { success: true, data: data.data };
+        }
+        return { success: false, error: data.error };
+      } catch (err) {
+        console.error('Failed to update capture:', err);
+        return { success: false, error: err.message };
+      }
+    }
+
     function updateCounts() {
       const counts = { all: captures.length };
 
@@ -1327,23 +1597,146 @@
       document.getElementById('modalUrl').href = capture.url;
       document.getElementById('modalUrl').textContent = shortenUrl(capture.url);
       document.getElementById('modalSummary').textContent = capture.summary || 'No summary available';
-      document.getElementById('modalCategory').textContent = capture.category || 'reference';
       document.getElementById('modalQuality').textContent = capture.quality_score ? `${capture.quality_score}/10` : '-';
       document.getElementById('modalDate').textContent = formatDate(capture.created_at);
 
+      // Setup editable category
+      const categoryEl = document.getElementById('modalCategory');
+      const categoryDropdown = document.getElementById('categoryDropdown');
+      categoryEl.textContent = capture.category || 'reference';
+
+      // Populate category dropdown
+      categoryDropdown.innerHTML = allCategories.map(cat => `
+        <div class="category-option ${cat.name === capture.category ? 'selected' : ''}" data-category="${escapeHtml(cat.name)}">
+          <span class="category-option-dot" style="background: ${cat.color}"></span>
+          ${escapeHtml(cat.name)}
+        </div>
+      `).join('');
+
+      // Setup editable tags
       const tagsContainer = document.getElementById('modalTags');
       const tagsSection = document.getElementById('modalTagsSection');
-
-      if (capture.tags?.length) {
-        tagsSection.style.display = 'block';
-        tagsContainer.innerHTML = capture.tags.map(tag =>
-          `<span class="modal-tag">${escapeHtml(tag)}</span>`
-        ).join('');
-      } else {
-        tagsSection.style.display = 'none';
-      }
+      tagsSection.style.display = 'block';
+      renderEditableTags(capture.tags || []);
 
       modalOverlay.classList.add('active');
+    }
+
+    function renderEditableTags(tags) {
+      const tagsContainer = document.getElementById('modalTags');
+      const tagEditStatus = document.getElementById('tagEditStatus');
+      tagEditStatus.classList.remove('visible');
+
+      tagsContainer.innerHTML = tags.map(tag => `
+        <span class="modal-tag-editable" data-tag="${escapeHtml(tag)}">
+          ${escapeHtml(tag)}
+          <span class="modal-tag-remove" data-tag="${escapeHtml(tag)}">&times;</span>
+        </span>
+      `).join('') + `
+        <div class="tag-input-wrapper">
+          <input type="text" class="tag-input" id="tagInput" placeholder="Add tag..." autocomplete="off">
+          <div class="tag-suggestions" id="tagSuggestions"></div>
+        </div>
+      `;
+
+      // Setup tag removal handlers
+      tagsContainer.querySelectorAll('.modal-tag-remove').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const tagToRemove = btn.dataset.tag;
+          const newTags = (currentCapture.tags || []).filter(t => t !== tagToRemove);
+
+          const result = await updateCapture(currentCapture.id, { tags: newTags });
+          if (result.success) {
+            currentCapture.tags = newTags;
+            renderEditableTags(newTags);
+            renderCaptures(); // Update cards
+            showTagStatus('Removed!');
+          }
+        });
+      });
+
+      // Setup tag input
+      const tagInput = document.getElementById('tagInput');
+      const tagSuggestions = document.getElementById('tagSuggestions');
+
+      tagInput.addEventListener('input', () => {
+        const value = tagInput.value.trim().toLowerCase();
+        if (value.length === 0) {
+          tagSuggestions.classList.remove('active');
+          return;
+        }
+
+        // Filter suggestions (exclude already added tags)
+        const currentTags = currentCapture.tags || [];
+        const suggestions = allTags
+          .filter(t => t.toLowerCase().includes(value) && !currentTags.includes(t))
+          .slice(0, 5);
+
+        if (suggestions.length > 0) {
+          tagSuggestions.innerHTML = suggestions.map(s =>
+            `<div class="tag-suggestion" data-tag="${escapeHtml(s)}">${escapeHtml(s)}</div>`
+          ).join('');
+          tagSuggestions.classList.add('active');
+
+          // Handle suggestion clicks
+          tagSuggestions.querySelectorAll('.tag-suggestion').forEach(el => {
+            el.addEventListener('click', () => addTag(el.dataset.tag));
+          });
+        } else {
+          tagSuggestions.classList.remove('active');
+        }
+      });
+
+      tagInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const newTag = tagInput.value.trim();
+          if (newTag) {
+            await addTag(newTag);
+          }
+        }
+        if (e.key === 'Escape') {
+          tagSuggestions.classList.remove('active');
+        }
+      });
+
+      tagInput.addEventListener('blur', () => {
+        // Delay to allow click on suggestions
+        setTimeout(() => tagSuggestions.classList.remove('active'), 150);
+      });
+    }
+
+    async function addTag(tag) {
+      const normalizedTag = tag.toLowerCase().trim();
+      if (!normalizedTag) return;
+
+      const currentTags = currentCapture.tags || [];
+      if (currentTags.includes(normalizedTag)) {
+        document.getElementById('tagInput').value = '';
+        return;
+      }
+
+      const newTags = [...currentTags, normalizedTag];
+      const result = await updateCapture(currentCapture.id, { tags: newTags });
+
+      if (result.success) {
+        currentCapture.tags = newTags;
+        // Add to allTags if it's new
+        if (!allTags.includes(normalizedTag)) {
+          allTags.push(normalizedTag);
+        }
+        renderEditableTags(newTags);
+        renderCaptures(); // Update cards
+        showTagStatus('Added!');
+      }
+    }
+
+    function showTagStatus(message) {
+      const status = document.getElementById('tagEditStatus');
+      status.textContent = message;
+      status.classList.add('visible');
+      setTimeout(() => status.classList.remove('visible'), 1500);
     }
 
     function closeModal() {

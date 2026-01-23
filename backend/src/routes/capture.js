@@ -258,6 +258,67 @@ router.get('/capture/:id', async (req, res, next) => {
   }
 });
 
+// PATCH /api/captures/:id - Update a capture's category and/or tags
+router.patch('/captures/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { category, tags } = req.body;
+
+    if (!isConfigured()) {
+      return res.json({
+        success: true,
+        message: 'Updated (dev mode)',
+        data: { id, category, tags }
+      });
+    }
+
+    // Build update object with only provided fields
+    const updates = {};
+    if (category !== undefined) {
+      updates.category = category;
+    }
+    if (tags !== undefined) {
+      // Ensure tags is an array
+      updates.tags = Array.isArray(tags) ? tags : [];
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No fields to update. Provide category and/or tags.'
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('captures')
+      .update(updates)
+      .eq('id', id)
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        error: 'Capture not found'
+      });
+    }
+
+    console.log(`[UPDATED] Capture ${id}:`, updates);
+
+    res.json({
+      success: true,
+      message: 'Capture updated',
+      data
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // DELETE /api/capture/:id - Delete a capture
 router.delete('/capture/:id', async (req, res, next) => {
   try {
