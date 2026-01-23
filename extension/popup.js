@@ -505,7 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
   openFullSearch.addEventListener('click', (e) => {
     e.preventDefault();
     chrome.storage.sync.get(['frontendUrl'], (result) => {
-      const url = result.frontendUrl || 'http://localhost:3002';
+      const url = result.frontendUrl || 'https://vault.wireforge.dev';
       chrome.tabs.create({ url });
     });
   });
