@@ -1431,19 +1431,10 @@
           const data = await response.json();
 
           if (data.success) {
-            btn.innerHTML = '<span class="notion-icon">✓</span> Synced!';
+            btn.innerHTML = '<span class="notion-icon">✓</span> Synced';
             btn.classList.add('synced');
             currentCapture.notion_synced = true;
             currentCapture.notion_page_id = data.pageId;
-
-            // Open the Notion page if available
-            if (data.pageUrl) {
-              setTimeout(() => {
-                if (confirm('Synced successfully! Open in Notion?')) {
-                  window.open(data.pageUrl, '_blank');
-                }
-              }, 500);
-            }
           } else {
             alert(`Sync failed: ${data.error}`);
             btn.innerHTML = originalText;
