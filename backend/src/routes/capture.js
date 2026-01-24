@@ -7,6 +7,7 @@ import { getUsageSummary, getTodayUsage } from '../services/usage.js';
 import { getSettingsWithOptions, updateSettings } from '../services/settings.js';
 import { getCategories, addCategory, updateCategory, deleteCategory } from '../services/categories.js';
 import { getTagsWithCounts, deleteTag, mergeTags, renameTag } from '../services/tags.js';
+import { isConfigured as isNotionConfigured, testConnection as testNotionConnection, syncCapture, syncMultiple } from '../services/notion.js';
 
 const router = express.Router();
 
@@ -118,7 +119,7 @@ router.get('/search', async (req, res, next) => {
     // Basic text search (Phase 3 will add vector/semantic search)
     const { data, error } = await supabase
       .from('captures')
-      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at')
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id')
       .or(`title.ilike.%${query}%,summary.ilike.%${query}%,content.ilike.%${query}%`)
       .order('created_at', { ascending: false })
       .limit(20);
@@ -207,7 +208,7 @@ router.get('/recent', async (req, res, next) => {
 
     const { data, error } = await supabase
       .from('captures')
-      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at')
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -293,7 +294,7 @@ router.patch('/captures/:id', async (req, res, next) => {
       .from('captures')
       .update(updates)
       .eq('id', id)
-      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at')
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id')
       .single();
 
     if (error) {
@@ -357,12 +358,13 @@ router.get('/status', async (req, res) => {
       supabase: isConfigured(),
       ai: isAiConfigured(),
       embeddings: isEmbeddingsConfigured(),
+      notion: isNotionConfigured(),
     },
     models: {
       ai: getAiModel(),
       embeddings: getEmbeddingsModel(),
     },
-    version: '2.1.0', // Phase 2 + cost tracking
+    version: '3.0.0', // Phase 4 - Notion sync
   });
 });
 
@@ -618,6 +620,167 @@ router.put('/tags/:name', async (req, res, next) => {
     }
 
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============ Notion Sync ============
+
+// GET /api/notion/status - Check Notion connection status
+router.get('/notion/status', async (req, res, next) => {
+  try {
+    if (!isNotionConfigured()) {
+      return res.json({
+        success: true,
+        configured: false,
+        message: 'Notion not configured. Set NOTION_API_KEY and NOTION_DATABASE_ID.',
+      });
+    }
+
+    const result = await testNotionConnection();
+
+    res.json({
+      success: true,
+      configured: true,
+      connected: result.success,
+      database: result.database,
+      error: result.error,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/notion/sync/:id - Sync a single capture to Notion
+router.post('/notion/sync/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!isNotionConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Notion not configured',
+      });
+    }
+
+    if (!isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Supabase not configured',
+      });
+    }
+
+    // Get the capture
+    const { data: capture, error: fetchError } = await supabase
+      .from('captures')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !capture) {
+      return res.status(404).json({
+        success: false,
+        error: 'Capture not found',
+      });
+    }
+
+    // Sync to Notion
+    const result = await syncCapture(capture);
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error,
+      });
+    }
+
+    // Update capture with Notion sync info
+    await supabase
+      .from('captures')
+      .update({
+        notion_synced: true,
+        notion_page_id: result.pageId,
+        notion_synced_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    console.log(`[Notion] Synced capture ${id} -> ${result.pageId}`);
+
+    res.json({
+      success: true,
+      message: result.created ? 'Created in Notion' : 'Updated in Notion',
+      pageId: result.pageId,
+      pageUrl: result.pageUrl,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/notion/sync-all - Sync all unsynced captures to Notion
+router.post('/notion/sync-all', async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+
+    if (!isNotionConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Notion not configured',
+      });
+    }
+
+    if (!isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Supabase not configured',
+      });
+    }
+
+    // Get unsynced captures
+    const { data: captures, error: fetchError } = await supabase
+      .from('captures')
+      .select('*')
+      .eq('status', 'completed')
+      .or('notion_synced.is.null,notion_synced.eq.false')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    if (!captures || captures.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No captures to sync',
+        synced: 0,
+      });
+    }
+
+    // Sync all captures
+    const results = await syncMultiple(captures);
+
+    // Update synced captures in database
+    for (const synced of results.synced) {
+      await supabase
+        .from('captures')
+        .update({
+          notion_synced: true,
+          notion_page_id: synced.pageId,
+          notion_synced_at: new Date().toISOString(),
+        })
+        .eq('id', synced.id);
+    }
+
+    console.log(`[Notion] Bulk sync: ${results.success} synced, ${results.failed} failed`);
+
+    res.json({
+      success: true,
+      synced: results.success,
+      failed: results.failed,
+      errors: results.errors,
+    });
   } catch (error) {
     next(error);
   }

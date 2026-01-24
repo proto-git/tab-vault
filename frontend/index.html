@@ -845,6 +845,34 @@
       background: rgba(239, 68, 68, 0.1);
     }
 
+    .modal-btn-notion {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-medium);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .modal-btn-notion:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .modal-btn-notion.synced {
+      color: #10b981;
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    .modal-btn-notion:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .notion-icon {
+      font-size: 14px;
+    }
+
     /* Editable Category */
     .category-edit-wrapper {
       position: relative;
@@ -1185,6 +1213,9 @@
       </div>
       <div class="modal-actions">
         <button class="modal-btn modal-btn-primary" id="modalOpen">Open Page</button>
+        <button class="modal-btn modal-btn-notion" id="modalNotion" title="Sync to Notion">
+          <span class="notion-icon">📝</span> Sync to Notion
+        </button>
         <button class="modal-btn modal-btn-secondary" id="modalReprocess">Reprocess</button>
         <button class="modal-btn modal-btn-danger" id="modalDelete">Delete</button>
       </div>
@@ -1383,6 +1414,46 @@
         } catch (err) {
           alert('Failed to delete');
         }
+      });
+
+      // Notion sync
+      document.getElementById('modalNotion').addEventListener('click', async () => {
+        if (!currentCapture) return;
+        const btn = document.getElementById('modalNotion');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="notion-icon">⏳</span> Syncing...';
+        btn.disabled = true;
+
+        try {
+          const response = await fetch(`${API_URL}/notion/sync/${currentCapture.id}`, {
+            method: 'POST'
+          });
+          const data = await response.json();
+
+          if (data.success) {
+            btn.innerHTML = '<span class="notion-icon">✓</span> Synced!';
+            btn.classList.add('synced');
+            currentCapture.notion_synced = true;
+            currentCapture.notion_page_id = data.pageId;
+
+            // Open the Notion page if available
+            if (data.pageUrl) {
+              setTimeout(() => {
+                if (confirm('Synced successfully! Open in Notion?')) {
+                  window.open(data.pageUrl, '_blank');
+                }
+              }, 500);
+            }
+          } else {
+            alert(`Sync failed: ${data.error}`);
+            btn.innerHTML = originalText;
+          }
+        } catch (err) {
+          alert('Failed to sync to Notion');
+          btn.innerHTML = originalText;
+        }
+
+        btn.disabled = false;
       });
 
       // Keyboard shortcuts
@@ -1620,6 +1691,16 @@
       const tagsSection = document.getElementById('modalTagsSection');
       tagsSection.style.display = 'block';
       renderEditableTags(capture.tags || []);
+
+      // Update Notion sync button state
+      const notionBtn = document.getElementById('modalNotion');
+      if (capture.notion_synced) {
+        notionBtn.innerHTML = '<span class="notion-icon">✓</span> Synced';
+        notionBtn.classList.add('synced');
+      } else {
+        notionBtn.innerHTML = '<span class="notion-icon">📝</span> Sync to Notion';
+        notionBtn.classList.remove('synced');
+      }
 
       modalOverlay.classList.add('active');
     }
