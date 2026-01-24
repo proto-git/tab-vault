@@ -772,6 +772,7 @@
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: var(--space-md);
+      overflow: visible;
     }
 
     .modal-stat {
@@ -868,7 +869,11 @@
     }
 
     .category-dropdown {
-      position: fixed;
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: 4px;
       background: var(--bg-elevated);
       border: 1px solid var(--border-medium);
       border-radius: 8px;
@@ -1310,15 +1315,7 @@
 
       categoryEl.addEventListener('click', (e) => {
         e.stopPropagation();
-        const isActive = categoryDropdown.classList.toggle('active');
-
-        // Position dropdown below the category element
-        if (isActive) {
-          const rect = categoryEl.getBoundingClientRect();
-          categoryDropdown.style.top = `${rect.bottom + 4}px`;
-          categoryDropdown.style.left = `${rect.left + rect.width / 2}px`;
-          categoryDropdown.style.transform = 'translateX(-50%)';
-        }
+        categoryDropdown.classList.toggle('active');
       });
 
       categoryDropdown.addEventListener('click', async (e) => {
