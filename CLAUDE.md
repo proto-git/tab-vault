@@ -22,7 +22,8 @@ backend/            Node.js + Express API (deployed on Railway)
   │   │   ├── categories.js Custom category management
   │   │   ├── tags.js       Tag aggregation/merge
   │   │   ├── settings.js   User preferences
-  │   │   └── usage.js      Cost tracking
+  │   │   ├── usage.js      Cost tracking
+  │   │   └── notion.js     Notion sync service
   │   └── config/
   │       └── models.js     AI model definitions
 
@@ -49,6 +50,9 @@ database/           Supabase (PostgreSQL + pgvector)
 - `GET/POST/DELETE /api/categories` - Category management
 - `GET/DELETE /api/tags` - Tag management
 - `POST /api/tags/merge` - Merge tags
+- `GET /api/notion/status` - Check Notion connection
+- `POST /api/notion/sync/:id` - Sync capture to Notion
+- `POST /api/notion/sync-all?limit=50` - Bulk sync unsynced captures
 
 ## Development
 
@@ -130,6 +134,7 @@ Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech
 - ALU-27: Editable categories/tags in capture modal
 - ALU-28: Fixed dropdown positioning in modal
 - ALU-29: Clean AI summaries (no markdown)
+- ALU-32: Notion sync integration with sync button in modal
 
 **Deployments:**
 - Frontend: https://vault.wireforge.dev (Vercel)
@@ -147,43 +152,39 @@ Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech
 ## Architecture Decisions & Future Considerations
 
 ### Current Limitations (Single-User Design)
-- **No user_id on tables** - Anyone with the URL can see all captures
+- **user_id columns added but unused** - Ready for multi-user but not enforced
 - **Shared API keys** - Single OpenRouter/OpenAI key for all usage
-- **Notion fields on captures** - Only supports ONE Notion account
+- **Single Notion workspace** - Current sync uses env-based configuration
 
 ### Future: Multi-User (ALU-30)
-When adding multi-user support:
-1. Add `user_id` column to: captures, usage, settings, categories
-2. Implement Supabase Auth
-3. Update RLS policies for data isolation
-4. Update `search_captures()` function to filter by user
-5. Add admin approval workflow for new users
+`user_id` columns already added (nullable) to: captures, usage, settings, categories
 
-**Recommendation:** Add `user_id` columns NOW as nullable to avoid migration pain later.
+When implementing multi-user:
+1. Implement Supabase Auth
+2. Enable RLS policies (commented out in migration 005)
+3. Filter by user_id in queries (search_captures already supports filter_user_id)
+4. Add admin approval workflow for new users
+
+### Current: Notion Integration (ALU-32 Complete)
+Single-workspace Notion sync via environment variables:
+- `NOTION_API_KEY` - Integration token
+- `NOTION_DATABASE_ID` - Target database
+
+Database schema for Notion:
+- Title, URL, Summary (rich_text), Category (select), Tags (multi_select), Quality (number), Captured (date)
+
+Sync service designed for future multi-workspace - accepts optional `apiKey` and `databaseId` params.
 
 ### Future: Multi-Notion Workspace (ALU-31)
-Current schema has basic Notion fields:
-```sql
-notion_synced BOOLEAN
-notion_page_id TEXT
-notion_synced_at TIMESTAMP
-```
-
 For multi-workspace support, will need:
 - `notion_integrations` table (stores tokens per workspace)
 - `notion_syncs` table (tracks syncs per capture per workspace)
 - `notion_routing_rules` table (auto-route by URL pattern, category, etc.)
 
-**Recommendation:** Design Notion sync service to accept `integrationId` parameter, default to env token. Don't hardcode single-workspace assumptions.
-
 ---
 
 ## Backlog (in Linear)
 
-**Next up:**
-- ALU-32: Phase 4 - Notion sync integration
-
-**Future:**
 - ALU-23: Auto-capture rules (capture tabs matching URL patterns)
 - ALU-30: Multi-user authentication and data isolation
 - ALU-31: Multi-Notion workspace support
