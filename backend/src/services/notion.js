@@ -81,7 +81,7 @@ export async function testConnection() {
 /**
  * Map a capture to Notion page properties
  * Expected database schema:
- * - Title (title) - display_title or title
+ * - Name (title) - display_title or title (Notion's default title property)
  * - URL (url) - url
  * - Summary (rich_text) - summary
  * - Category (select) - category
@@ -91,8 +91,8 @@ export async function testConnection() {
  */
 function mapCaptureToProperties(capture) {
   const properties = {
-    // Title property (required)
-    Title: {
+    // Title property (required) - Notion default is "Name"
+    Name: {
       title: [
         {
           type: 'text',
