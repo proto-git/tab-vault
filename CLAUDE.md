@@ -116,17 +116,25 @@ Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech
 
 ---
 
-## Current Status (Jan 22, 2026)
+## Current Status (Jan 24, 2026)
 
 **Completed features:**
 - Phase 1: Chrome extension + Express backend + Supabase
 - Phase 2: AI pipeline (scrape → summarize → categorize → tag → embed)
+- Phase 3: Semantic search using pgvector
 - ALU-15: Cost tracking with usage dashboard
 - ALU-16: Model selection (Claude Haiku, Sonnet, GPT-4o-mini)
 - ALU-17: Category & tag management with custom categories
-- Semantic search using pgvector (threshold: 0.4)
 - ALU-21: Frontend dashboard with search, filters, light/dark mode
 - ALU-22: AI-generated display titles and backfill endpoint
+- ALU-27: Editable categories/tags in capture modal
+- ALU-28: Fixed dropdown positioning in modal
+- ALU-29: Clean AI summaries (no markdown)
+
+**Deployments:**
+- Frontend: https://vault.wireforge.dev (Vercel)
+- Backend: Railway (auto-deploys on push to master)
+- Database: Supabase
 
 **Known issues:**
 - Old captures may lack embeddings or display_title
@@ -134,6 +142,48 @@ Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech
 - Fix: `POST /api/backfill-embeddings?limit=50` or `POST /api/backfill-titles?limit=50` (batch)
 - Or `POST /api/reprocess/:id` (individual - reruns full AI pipeline)
 
-**Backlog (in Linear):**
+---
+
+## Architecture Decisions & Future Considerations
+
+### Current Limitations (Single-User Design)
+- **No user_id on tables** - Anyone with the URL can see all captures
+- **Shared API keys** - Single OpenRouter/OpenAI key for all usage
+- **Notion fields on captures** - Only supports ONE Notion account
+
+### Future: Multi-User (ALU-30)
+When adding multi-user support:
+1. Add `user_id` column to: captures, usage, settings, categories
+2. Implement Supabase Auth
+3. Update RLS policies for data isolation
+4. Update `search_captures()` function to filter by user
+5. Add admin approval workflow for new users
+
+**Recommendation:** Add `user_id` columns NOW as nullable to avoid migration pain later.
+
+### Future: Multi-Notion Workspace (ALU-31)
+Current schema has basic Notion fields:
+```sql
+notion_synced BOOLEAN
+notion_page_id TEXT
+notion_synced_at TIMESTAMP
+```
+
+For multi-workspace support, will need:
+- `notion_integrations` table (stores tokens per workspace)
+- `notion_syncs` table (tracks syncs per capture per workspace)
+- `notion_routing_rules` table (auto-route by URL pattern, category, etc.)
+
+**Recommendation:** Design Notion sync service to accept `integrationId` parameter, default to env token. Don't hardcode single-workspace assumptions.
+
+---
+
+## Backlog (in Linear)
+
+**Next up:**
+- ALU-32: Phase 4 - Notion sync integration
+
+**Future:**
 - ALU-23: Auto-capture rules (capture tabs matching URL patterns)
-- ALU-24: Notion sync (Phase 4 - schema already has fields for this)
+- ALU-30: Multi-user authentication and data isolation
+- ALU-31: Multi-Notion workspace support

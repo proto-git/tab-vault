@@ -34,6 +34,9 @@ CREATE TABLE IF NOT EXISTS captures (
   notion_page_id TEXT,
   notion_synced_at TIMESTAMP,
 
+  -- Multi-user support (added for future-proofing)
+  user_id UUID REFERENCES auth.users(id),
+
   -- Processing status
   status TEXT DEFAULT 'pending',   -- pending, processing, completed, error
   error_message TEXT,
@@ -50,6 +53,7 @@ CREATE INDEX IF NOT EXISTS captures_category_idx ON captures(category);
 CREATE INDEX IF NOT EXISTS captures_status_idx ON captures(status);
 CREATE INDEX IF NOT EXISTS captures_created_at_idx ON captures(created_at DESC);
 CREATE INDEX IF NOT EXISTS captures_quality_score_idx ON captures(quality_score DESC);
+CREATE INDEX IF NOT EXISTS captures_user_id_idx ON captures(user_id);
 
 -- Vector similarity index (for semantic search)
 -- Using ivfflat for faster approximate nearest neighbor search
@@ -76,18 +80,21 @@ CREATE TRIGGER captures_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
 
--- Function for semantic search (to be used in Phase 3)
+-- Function for semantic search (supports optional user filtering for multi-user)
 CREATE OR REPLACE FUNCTION search_captures(
   query_embedding vector(1536),
   match_threshold FLOAT DEFAULT 0.7,
-  match_count INT DEFAULT 10
+  match_count INT DEFAULT 10,
+  filter_user_id UUID DEFAULT NULL
 )
 RETURNS TABLE (
   id UUID,
   url TEXT,
   title TEXT,
+  display_title TEXT,
   summary TEXT,
   category TEXT,
+  tags TEXT[],
   quality_score INTEGER,
   created_at TIMESTAMP WITH TIME ZONE,
   similarity FLOAT
@@ -100,14 +107,17 @@ BEGIN
     c.id,
     c.url,
     c.title,
+    c.display_title,
     c.summary,
     c.category,
+    c.tags,
     c.quality_score,
     c.created_at,
     1 - (c.embedding <=> query_embedding) AS similarity
   FROM captures c
   WHERE c.embedding IS NOT NULL
     AND 1 - (c.embedding <=> query_embedding) > match_threshold
+    AND (filter_user_id IS NULL OR c.user_id = filter_user_id)
   ORDER BY c.embedding <=> query_embedding
   LIMIT match_count;
 END;
