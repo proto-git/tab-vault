@@ -99,7 +99,7 @@ router.post('/capture', async (req, res, next) => {
 // GET /api/search - Search captures
 router.get('/search', async (req, res, next) => {
   try {
-    const { q: query } = req.query;
+    const { q: query, source } = req.query;
 
     if (!query) {
       return res.status(400).json({
@@ -117,10 +117,17 @@ router.get('/search', async (req, res, next) => {
     }
 
     // Basic text search (Phase 3 will add vector/semantic search)
-    const { data, error } = await supabase
+    let queryBuilder = supabase
       .from('captures')
-      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id')
-      .or(`title.ilike.%${query}%,summary.ilike.%${query}%,content.ilike.%${query}%`)
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name')
+      .or(`title.ilike.%${query}%,summary.ilike.%${query}%,content.ilike.%${query}%`);
+
+    // Apply source filter if provided
+    if (source) {
+      queryBuilder = queryBuilder.eq('source_platform', source);
+    }
+
+    const { data, error } = await queryBuilder
       .order('created_at', { ascending: false })
       .limit(20);
 
@@ -141,7 +148,7 @@ router.get('/search', async (req, res, next) => {
 // GET /api/semantic-search - Semantic search using embeddings
 router.get('/semantic-search', async (req, res, next) => {
   try {
-    const { q: query } = req.query;
+    const { q: query, source } = req.query;
     const threshold = parseFloat(req.query.threshold) || 0.4;
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
 
@@ -171,11 +178,12 @@ router.get('/semantic-search', async (req, res, next) => {
     const queryEmbedding = await generateQueryEmbedding(query);
     const vectorString = formatForPgVector(queryEmbedding);
 
-    // Call the search_captures function
+    // Call the search_captures function with optional source filter
     const { data, error } = await supabase.rpc('search_captures', {
       query_embedding: vectorString,
       match_threshold: threshold,
-      match_count: limit
+      match_count: limit,
+      filter_source: source || null
     });
 
     if (error) {
@@ -197,6 +205,7 @@ router.get('/semantic-search', async (req, res, next) => {
 router.get('/recent', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    const { source, author } = req.query;
 
     if (!isConfigured()) {
       return res.json({
@@ -206,9 +215,21 @@ router.get('/recent', async (req, res, next) => {
       });
     }
 
-    const { data, error } = await supabase
+    let queryBuilder = supabase
       .from('captures')
-      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id')
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name');
+
+    // Apply source filter if provided
+    if (source) {
+      queryBuilder = queryBuilder.eq('source_platform', source);
+    }
+
+    // Apply author filter if provided
+    if (author) {
+      queryBuilder = queryBuilder.ilike('author_name', `%${author}%`);
+    }
+
+    const { data, error } = await queryBuilder
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -259,6 +280,64 @@ router.get('/capture/:id', async (req, res, next) => {
   }
 });
 
+// GET /api/captures/:id/related - Get semantically related captures
+router.get('/captures/:id/related', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 5, 1), 10);
+
+    if (!isConfigured()) {
+      return res.json({
+        success: true,
+        results: [],
+        message: 'Dev mode - Supabase not configured'
+      });
+    }
+
+    // Use raw SQL query with pgvector to find similar captures
+    const { data, error } = await supabase.rpc('get_related_captures', {
+      capture_id: id,
+      match_count: limit
+    });
+
+    if (error) {
+      // If RPC doesn't exist, fall back to direct query
+      if (error.code === '42883') {
+        // Function doesn't exist - use direct query approach
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('captures')
+          .select('id, url, title, display_title, category, tags, created_at')
+          .neq('id', id)
+          .not('embedding', 'is', null)
+          .limit(limit);
+
+        if (fallbackError) {
+          throw fallbackError;
+        }
+
+        // Return results without similarity scores (fallback)
+        res.json({
+          success: true,
+          results: (fallbackData || []).map(item => ({
+            ...item,
+            similarity: null
+          })),
+          fallback: true
+        });
+        return;
+      }
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      results: data || []
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // PATCH /api/captures/:id - Update a capture's category and/or tags
 router.patch('/captures/:id', async (req, res, next) => {
   try {
@@ -294,7 +373,7 @@ router.patch('/captures/:id', async (req, res, next) => {
       .from('captures')
       .update(updates)
       .eq('id', id)
-      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id')
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name')
       .single();
 
     if (error) {

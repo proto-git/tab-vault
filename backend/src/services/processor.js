@@ -2,9 +2,10 @@
 // Orchestrates: scrape → AI process → embed → update
 
 import { supabase, isConfigured as isSupabaseConfigured } from './supabase.js';
-import { scrapeUrl, isScrapeable } from './scraper.js';
-import { processContent, generateDisplayTitle, isConfigured as isAiConfigured } from './ai.js';
+import { scrapeUrl, isScrapeable, extractAuthor } from './scraper.js';
+import { processContent, generateDisplayTitle, extractInsights, isConfigured as isAiConfigured } from './ai.js';
 import { generateCaptureEmbedding, formatForPgVector, isConfigured as isEmbeddingsConfigured } from './embeddings.js';
+import { detectSourcePlatform } from './sourceDetector.js';
 
 /**
  * Process a single capture through the AI pipeline
@@ -38,32 +39,56 @@ export async function processCapture(captureId) {
 
     // 3. Scrape content (if URL is scrapeable)
     let content = '';
+    let rawHtml = '';
     if (isScrapeable(capture.url)) {
       console.log('[Processor] Scraping URL...');
       const scrapeResult = await scrapeUrl(capture.url);
       if (scrapeResult.success) {
         content = scrapeResult.content;
+        rawHtml = scrapeResult.html || '';
         console.log(`[Processor] Scraped ${content.length} characters`);
       } else {
         console.log(`[Processor] Scrape failed: ${scrapeResult.error}`);
+        // Even on failure, we might have HTML for author extraction
+        rawHtml = scrapeResult.html || '';
       }
+    }
+
+    // Detect source platform from URL
+    const sourcePlatform = detectSourcePlatform(capture.url);
+    console.log(`[Processor] Source platform: ${sourcePlatform}`);
+
+    // Extract author name from HTML and URL
+    const authorName = extractAuthor(rawHtml, capture.url);
+    if (authorName) {
+      console.log(`[Processor] Extracted author: ${authorName}`);
     }
 
     // Prepare update object
     const updates = {
       content: content || null,
       processed_at: new Date().toISOString(),
+      source_platform: sourcePlatform,
+      author_name: authorName,
     };
 
     // 4. AI Processing (if configured)
     if (isAiConfigured() && (content || capture.title)) {
       console.log('[Processor] Running AI processing...');
       try {
-        const aiResult = await processContent(
-          capture.title || capture.url,
-          content || capture.title || '',
-          captureId
-        );
+        // Run processContent and extractInsights in parallel
+        const [aiResult, insights] = await Promise.all([
+          processContent(
+            capture.title || capture.url,
+            content || capture.title || '',
+            captureId
+          ),
+          extractInsights(
+            capture.title || capture.url,
+            content || capture.title || '',
+            captureId
+          ),
+        ]);
 
         updates.summary = aiResult.summary;
         updates.category = aiResult.category;
@@ -71,8 +96,10 @@ export async function processCapture(captureId) {
         updates.quality_score = aiResult.quality;
         updates.actionability_score = aiResult.actionability;
         updates.display_title = aiResult.displayTitle;
+        updates.key_takeaways = insights.takeaways;
+        updates.action_items = insights.actions;
 
-        console.log(`[Processor] AI complete: ${aiResult.category}, quality=${aiResult.quality}`);
+        console.log(`[Processor] AI complete: ${aiResult.category}, quality=${aiResult.quality}, takeaways=${insights.takeaways.length}, actions=${insights.actions.length}`);
       } catch (aiError) {
         console.error('[Processor] AI processing failed:', aiError.message);
         // Continue without AI - don't fail the whole process

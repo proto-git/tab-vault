@@ -257,6 +257,109 @@
     .category-dot.news { background: var(--cat-news); }
     .category-dot.reference { background: var(--cat-reference); }
 
+    /* Source platform badges */
+    .source-badge {
+      font-size: 0.7rem;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      text-transform: lowercase;
+    }
+
+    .source-badge.twitter { background: rgba(29, 161, 242, 0.15); color: #1DA1F2; }
+    .source-badge.youtube { background: rgba(255, 0, 0, 0.1); color: #FF0000; }
+    .source-badge.medium { background: rgba(0, 0, 0, 0.1); color: var(--text-secondary); }
+    .source-badge.substack { background: rgba(255, 102, 0, 0.1); color: #FF6600; }
+    .source-badge.github { background: rgba(110, 84, 148, 0.15); color: #6e5494; }
+    .source-badge.reddit { background: rgba(255, 69, 0, 0.1); color: #FF4500; }
+    .source-badge.hackernews { background: rgba(255, 102, 0, 0.1); color: #FF6600; }
+    .source-badge.linkedin { background: rgba(10, 102, 194, 0.15); color: #0A66C2; }
+
+    /* Source filter dropdown */
+    .source-filter-wrapper {
+      position: relative;
+      margin-top: var(--space-sm);
+    }
+
+    .source-filter-btn {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      width: 100%;
+      padding: var(--space-sm) var(--space-md);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .source-filter-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .source-filter-btn.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .source-filter-btn .filter-arrow {
+      margin-left: auto;
+      font-size: 0.7em;
+      opacity: 0.5;
+    }
+
+    .source-filter-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      margin-top: 4px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-medium);
+      border-radius: 8px;
+      padding: 6px;
+      z-index: 50;
+      box-shadow: var(--shadow-card);
+      display: none;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .source-filter-dropdown.active {
+      display: block;
+    }
+
+    .source-filter-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+      transition: background var(--duration-fast);
+    }
+
+    .source-filter-option:hover {
+      background: var(--bg-hover);
+    }
+
+    .source-filter-option.selected {
+      background: var(--accent-soft);
+    }
+
+    .source-filter-option .source-icon {
+      font-size: 1rem;
+    }
+
     /* Stats card */
     .stats-card {
       background: var(--bg-elevated);
@@ -499,6 +602,20 @@
       overflow: hidden;
     }
 
+    .capture-author {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .capture-author::before {
+      content: 'by';
+      opacity: 0.7;
+    }
+
     .capture-summary {
       font-size: 0.9rem;
       color: var(--text-secondary);
@@ -707,6 +824,25 @@
       text-decoration: underline;
     }
 
+    .modal-author {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .modal-author::before {
+      content: 'by';
+      color: var(--text-muted);
+    }
+
+    .modal-author-name {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
     .modal-close {
       background: var(--bg-elevated);
       border: none;
@@ -871,6 +1007,99 @@
 
     .notion-icon {
       font-size: 14px;
+    }
+
+    /* Related Captures Section */
+    .related-captures {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+    }
+
+    .related-capture-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      padding: var(--space-sm) var(--space-md);
+      background: var(--bg-elevated);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .related-capture-item:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-medium);
+      transform: translateX(4px);
+    }
+
+    .related-capture-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .related-capture-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .related-capture-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      margin-top: 2px;
+    }
+
+    .related-capture-category {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--accent-soft);
+    }
+
+    .related-capture-category.learning { color: var(--cat-learning); }
+    .related-capture-category.work { color: var(--cat-work); }
+    .related-capture-category.project { color: var(--cat-project); }
+    .related-capture-category.news { color: var(--cat-news); }
+    .related-capture-category.reference { color: var(--cat-reference); }
+
+    .related-capture-similarity {
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .related-loading {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: var(--space-md);
+    }
+
+    .related-loading-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--bg-elevated);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .related-empty {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: var(--space-md);
+      text-align: center;
     }
 
     /* Editable Category */
@@ -1046,6 +1275,111 @@
       opacity: 1;
     }
 
+    /* Key Takeaways Section */
+    .takeaways-section {
+      margin-bottom: var(--space-xl);
+    }
+
+    .takeaways-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .takeaways-toggle {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      transition: transform var(--duration-fast);
+    }
+
+    .takeaways-section.collapsed .takeaways-toggle {
+      transform: rotate(-90deg);
+    }
+
+    .takeaways-content {
+      margin-top: var(--space-md);
+      transition: all var(--duration-normal) var(--ease-out);
+    }
+
+    .takeaways-section.collapsed .takeaways-content {
+      display: none;
+    }
+
+    .takeaways-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 var(--space-md) 0;
+    }
+
+    .takeaways-list li {
+      position: relative;
+      padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-lg);
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: var(--text-primary);
+      border-left: 2px solid var(--accent);
+      margin-bottom: var(--space-sm);
+      background: var(--bg-elevated);
+      border-radius: 0 6px 6px 0;
+    }
+
+    .takeaways-list li::before {
+      content: '';
+      position: absolute;
+      left: -6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+
+    .action-items-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: var(--space-sm);
+      margin-top: var(--space-md);
+    }
+
+    .action-items-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .action-items-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: var(--text-primary);
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 6px;
+      margin-bottom: var(--space-sm);
+    }
+
+    .action-items-list li::before {
+      content: '\\2610';
+      color: #10b981;
+      font-size: 1.1em;
+      flex-shrink: 0;
+    }
+
+    .takeaways-empty {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
     /* Responsive */
     @media (max-width: 900px) {
       .app {
@@ -1113,6 +1447,27 @@
         </button>
       </nav>
 
+      <nav class="nav-section">
+        <span class="nav-label">Sources</span>
+        <div class="source-filter-wrapper">
+          <button class="source-filter-btn" id="sourceFilterBtn">
+            <span id="sourceFilterLabel">All Sources</span>
+            <span class="filter-arrow">&#9660;</span>
+          </button>
+          <div class="source-filter-dropdown" id="sourceFilterDropdown">
+            <div class="source-filter-option selected" data-source="">All Sources</div>
+            <div class="source-filter-option" data-source="twitter">Twitter</div>
+            <div class="source-filter-option" data-source="youtube">YouTube</div>
+            <div class="source-filter-option" data-source="github">GitHub</div>
+            <div class="source-filter-option" data-source="reddit">Reddit</div>
+            <div class="source-filter-option" data-source="hackernews">Hacker News</div>
+            <div class="source-filter-option" data-source="medium">Medium</div>
+            <div class="source-filter-option" data-source="substack">Substack</div>
+            <div class="source-filter-option" data-source="linkedin">LinkedIn</div>
+          </div>
+        </div>
+      </nav>
+
       <div class="stats-card">
         <div class="stats-title">Today's Usage</div>
         <div class="stats-grid">
@@ -1178,6 +1533,9 @@
         <img class="modal-favicon" id="modalFavicon" src="" alt="" onerror="this.style.display='none'">
         <div class="modal-title-section">
           <h3 class="modal-title" id="modalTitle"></h3>
+          <div class="modal-author" id="modalAuthorWrapper" style="display: none;">
+            <span class="modal-author-name" id="modalAuthor"></span>
+          </div>
           <p class="modal-url"><a href="#" id="modalUrl" target="_blank"></a></p>
         </div>
         <button class="modal-close" id="modalClose">&times;</button>
@@ -1186,6 +1544,19 @@
         <div class="modal-section">
           <div class="modal-section-title">Summary</div>
           <p class="modal-summary" id="modalSummary"></p>
+        </div>
+        <div class="modal-section takeaways-section" id="takeawaysSection">
+          <div class="takeaways-header" id="takeawaysHeader">
+            <span class="takeaways-toggle">&#9660;</span>
+            <span class="modal-section-title" style="margin-bottom: 0;">Key Takeaways</span>
+          </div>
+          <div class="takeaways-content" id="takeawaysContent">
+            <ul class="takeaways-list" id="takeawaysList"></ul>
+            <div id="actionItemsWrapper">
+              <div class="action-items-title">Action Items</div>
+              <ul class="action-items-list" id="actionItemsList"></ul>
+            </div>
+          </div>
         </div>
         <div class="modal-section" id="modalTagsSection">
           <div class="modal-section-title">Tags <span style="font-weight: normal; opacity: 0.5; font-size: 0.8em;">(click to edit)</span></div>
@@ -1210,6 +1581,15 @@
             </div>
           </div>
         </div>
+        <div class="modal-section" id="relatedSection">
+          <div class="modal-section-title">Related Captures</div>
+          <div class="related-captures" id="relatedCaptures">
+            <div class="related-loading">
+              <div class="related-loading-spinner"></div>
+              <span>Finding related captures...</span>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="modal-btn modal-btn-primary" id="modalOpen">Open Page</button>
@@ -1230,6 +1610,7 @@
     let captures = [];
     let currentFilter = 'all';
     let currentSort = 'recent';
+    let currentSource = '';
     let currentCapture = null;
     let allCategories = [];
     let allTags = [];
@@ -1455,6 +1836,52 @@
           searchInput.focus();
         }
       });
+
+      // Takeaways toggle
+      document.getElementById('takeawaysHeader').addEventListener('click', () => {
+        const section = document.getElementById('takeawaysSection');
+        section.classList.toggle('collapsed');
+      });
+
+      // Source filter dropdown
+      const sourceFilterBtn = document.getElementById('sourceFilterBtn');
+      const sourceFilterDropdown = document.getElementById('sourceFilterDropdown');
+      const sourceFilterLabel = document.getElementById('sourceFilterLabel');
+
+      sourceFilterBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sourceFilterDropdown.classList.toggle('active');
+      });
+
+      sourceFilterDropdown.addEventListener('click', (e) => {
+        const option = e.target.closest('.source-filter-option');
+        if (!option) return;
+
+        const newSource = option.dataset.source;
+        currentSource = newSource;
+
+        // Update UI
+        sourceFilterDropdown.querySelectorAll('.source-filter-option').forEach(opt => {
+          opt.classList.toggle('selected', opt.dataset.source === newSource);
+        });
+        sourceFilterLabel.textContent = option.textContent.trim();
+        sourceFilterBtn.classList.toggle('active', newSource !== '');
+        sourceFilterDropdown.classList.remove('active');
+
+        // Reload with source filter
+        if (searchInput.value.trim()) {
+          searchCaptures(searchInput.value.trim());
+        } else {
+          loadCaptures();
+        }
+      });
+
+      // Close source dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.source-filter-wrapper')) {
+          sourceFilterDropdown.classList.remove('active');
+        }
+      });
     }
 
     async function loadCaptures() {
@@ -1462,7 +1889,11 @@
       resultsTitle.textContent = 'Recent Captures';
 
       try {
-        const response = await fetch(`${API_URL}/recent?limit=50`);
+        let url = `${API_URL}/recent?limit=50`;
+        if (currentSource) {
+          url += `&source=${encodeURIComponent(currentSource)}`;
+        }
+        const response = await fetch(url);
         const data = await response.json();
         captures = data.results || [];
         updateCounts();
@@ -1477,8 +1908,11 @@
       resultsTitle.textContent = 'Search Results';
 
       try {
+        // Build source filter param
+        const sourceParam = currentSource ? `&source=${encodeURIComponent(currentSource)}` : '';
+
         // Try semantic search first
-        const semanticRes = await fetch(`${API_URL}/semantic-search?q=${encodeURIComponent(query)}`);
+        const semanticRes = await fetch(`${API_URL}/semantic-search?q=${encodeURIComponent(query)}${sourceParam}`);
         const semanticData = await semanticRes.json();
 
         if (semanticData.success && semanticData.results?.length > 0) {
@@ -1486,7 +1920,7 @@
           resultsCount.textContent = `${captures.length} results (semantic)`;
         } else {
           // Fall back to keyword search
-          const keywordRes = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`);
+          const keywordRes = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}${sourceParam}`);
           const keywordData = await keywordRes.json();
           captures = keywordData.results || [];
           resultsCount.textContent = `${captures.length} results (keyword)`;
@@ -1611,6 +2045,8 @@
       capturesGrid.innerHTML = filtered.map(capture => {
         const category = capture.category?.toLowerCase() || 'reference';
         const tags = capture.tags || [];
+        const sourcePlatform = capture.source_platform || '';
+        const authorName = capture.author_name || '';
 
         return `
           <article class="capture-card ${category}" data-id="${capture.id}">
@@ -1618,11 +2054,15 @@
               ${capture.favicon_url ?
                 `<img class="capture-favicon" src="${capture.favicon_url}" alt="" onerror="this.style.display='none'">` :
                 ''}
-              <h3 class="capture-title">${escapeHtml(capture.display_title || capture.title || capture.url)}</h3>
+              <div style="flex: 1; min-width: 0;">
+                <h3 class="capture-title">${escapeHtml(capture.display_title || capture.title || capture.url)}</h3>
+                ${authorName ? `<div class="capture-author">${escapeHtml(authorName)}</div>` : ''}
+              </div>
             </div>
             ${capture.summary ? `<p class="capture-summary">${escapeHtml(capture.summary)}</p>` : ''}
             <div class="capture-meta">
               <span class="capture-category">${category}</span>
+              ${sourcePlatform ? `<span class="source-badge ${sourcePlatform}">${escapeHtml(sourcePlatform)}</span>` : ''}
               <div class="capture-tags">
                 ${tags.slice(0, 3).map(tag => `<span class="capture-tag">${escapeHtml(tag)}</span>`).join('')}
               </div>
@@ -1658,6 +2098,17 @@
         modalFavicon.style.display = 'none';
       }
       document.getElementById('modalTitle').textContent = capture.display_title || capture.title || capture.url;
+
+      // Show author if available
+      const authorWrapper = document.getElementById('modalAuthorWrapper');
+      const authorEl = document.getElementById('modalAuthor');
+      if (capture.author_name) {
+        authorEl.textContent = capture.author_name;
+        authorWrapper.style.display = 'flex';
+      } else {
+        authorWrapper.style.display = 'none';
+      }
+
       document.getElementById('modalUrl').href = capture.url;
       document.getElementById('modalUrl').textContent = shortenUrl(capture.url);
       document.getElementById('modalSummary').textContent = capture.summary || 'No summary available';
@@ -1693,7 +2144,44 @@
         notionBtn.classList.remove('synced');
       }
 
+      // Load related captures
+      loadRelatedCaptures(capture.id);
+
+      // Render key takeaways and action items
+      renderTakeaways(capture.key_takeaways || [], capture.action_items || []);
+
       modalOverlay.classList.add('active');
+    }
+
+    function renderTakeaways(takeaways, actionItems) {
+      const takeawaysSection = document.getElementById('takeawaysSection');
+      const takeawaysList = document.getElementById('takeawaysList');
+      const actionItemsList = document.getElementById('actionItemsList');
+      const actionItemsWrapper = document.getElementById('actionItemsWrapper');
+
+      // Hide section if no takeaways or action items
+      if (takeaways.length === 0 && actionItems.length === 0) {
+        takeawaysSection.style.display = 'none';
+        return;
+      }
+
+      takeawaysSection.style.display = 'block';
+
+      // Render takeaways
+      if (takeaways.length > 0) {
+        takeawaysList.innerHTML = takeaways.map(t => `<li>${escapeHtml(t)}</li>`).join('');
+        takeawaysList.style.display = 'block';
+      } else {
+        takeawaysList.innerHTML = '<p class="takeaways-empty">No key takeaways extracted.</p>';
+      }
+
+      // Render action items
+      if (actionItems.length > 0) {
+        actionItemsWrapper.style.display = 'block';
+        actionItemsList.innerHTML = actionItems.map(a => `<li>${escapeHtml(a)}</li>`).join('');
+      } else {
+        actionItemsWrapper.style.display = 'none';
+      }
     }
 
     function renderEditableTags(tags) {
@@ -1811,6 +2299,78 @@
       status.textContent = message;
       status.classList.add('visible');
       setTimeout(() => status.classList.remove('visible'), 1500);
+    }
+
+    async function loadRelatedCaptures(captureId) {
+      const container = document.getElementById('relatedCaptures');
+      const section = document.getElementById('relatedSection');
+
+      // Show loading state
+      container.innerHTML = `
+        <div class="related-loading">
+          <div class="related-loading-spinner"></div>
+          <span>Finding related captures...</span>
+        </div>
+      `;
+
+      try {
+        const response = await fetch(`${API_URL}/captures/${captureId}/related?limit=5`);
+        const data = await response.json();
+
+        if (!data.success || !data.results || data.results.length === 0) {
+          container.innerHTML = '<div class="related-empty">No related captures found</div>';
+          return;
+        }
+
+        container.innerHTML = data.results.map(item => {
+          const category = item.category?.toLowerCase() || 'reference';
+          const similarityPercent = item.similarity !== null
+            ? Math.round(item.similarity * 100)
+            : null;
+
+          return `
+            <div class="related-capture-item" data-id="${item.id}">
+              <div class="related-capture-content">
+                <div class="related-capture-title">${escapeHtml(item.display_title || item.title || item.url)}</div>
+                <div class="related-capture-meta">
+                  <span class="related-capture-category ${category}">${category}</span>
+                  ${similarityPercent !== null ? `<span class="related-capture-similarity">${similarityPercent}% similar</span>` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        // Add click handlers to navigate to related captures
+        container.querySelectorAll('.related-capture-item').forEach(item => {
+          item.addEventListener('click', async () => {
+            const id = item.dataset.id;
+            // Find in current captures first
+            let capture = captures.find(c => c.id === id);
+
+            if (!capture) {
+              // Fetch from API if not in current list
+              try {
+                const res = await fetch(`${API_URL}/capture/${id}`);
+                const data = await res.json();
+                if (data.success) {
+                  capture = data.data;
+                }
+              } catch (err) {
+                console.error('Failed to fetch capture:', err);
+              }
+            }
+
+            if (capture) {
+              openModal(capture);
+            }
+          });
+        });
+
+      } catch (err) {
+        console.error('Failed to load related captures:', err);
+        container.innerHTML = '<div class="related-empty">Failed to load related captures</div>';
+      }
     }
 
     function closeModal() {

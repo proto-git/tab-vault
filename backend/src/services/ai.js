@@ -220,6 +220,45 @@ Rate this content:`;
 }
 
 /**
+ * Extract key insights and action items from content
+ * @param {string} title - Page title
+ * @param {string} content - Page content
+ * @param {string|null} captureId - Capture ID for usage tracking
+ * @returns {Promise<{takeaways: string[], actions: string[]}>}
+ */
+export async function extractInsights(title, content, captureId = null) {
+  const systemPrompt = `Extract key insights from this content. Return JSON only:
+{"takeaways": ["3-5 key points"], "actions": ["0-3 actionable items if any"]}
+Keep each point concise (under 100 chars). Focus on unique/valuable insights.
+If no clear action items, return empty actions array.`;
+
+  const userPrompt = `Title: ${title}
+
+Content:
+${content.slice(0, 6000)}
+
+Extract key takeaways and action items:`;
+
+  const response = await callOpenRouter(systemPrompt, userPrompt, 'insights', captureId);
+
+  try {
+    // Extract JSON from response (handle markdown code blocks)
+    const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        takeaways: Array.isArray(parsed.takeaways) ? parsed.takeaways.slice(0, 5) : [],
+        actions: Array.isArray(parsed.actions) ? parsed.actions.slice(0, 3) : [],
+      };
+    }
+    throw new Error('No JSON found in response');
+  } catch (e) {
+    console.error('[AI] Failed to parse insights:', e.message);
+    return { takeaways: [], actions: [] };
+  }
+}
+
+/**
  * Generate a clean display title
  * @param {string} title - Original page title
  * @param {string} content - Page content (for context)
