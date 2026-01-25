@@ -1,13 +1,160 @@
 // Image Storage Service
 // Downloads og:image and stores in Supabase Storage
+// Includes platform-specific extractors for JS-heavy sites
 
 import { supabase, isConfigured } from './supabase.js';
 
 const BUCKET_NAME = 'capture-images';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit
 
+// Skip generic/default images from platforms
+const SKIP_IMAGE_PATTERNS = [
+  /twimg\.com\/.*\/og\/image\.png/, // Twitter default og:image
+  /abs\.twimg\.com\/rweb\/ssr\/default/, // Twitter SSR default
+];
+
 /**
- * Extract og:image URL from HTML
+ * Check if an image URL is a generic platform default (should skip)
+ */
+function isGenericImage(url) {
+  return SKIP_IMAGE_PATTERNS.some(pattern => pattern.test(url));
+}
+
+/**
+ * Extract image URL - tries platform-specific APIs first, then falls back to og:image
+ * @param {string} url - The page URL
+ * @param {string} html - Raw HTML content (optional)
+ * @returns {Promise<string|null>} - The image URL or null
+ */
+export async function extractImageUrl(url, html = null) {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+
+    // Twitter/X - use syndication API
+    if (hostname === 'twitter.com' || hostname === 'x.com' ||
+        hostname === 'www.twitter.com' || hostname === 'www.x.com' ||
+        hostname === 'mobile.twitter.com' || hostname === 'mobile.x.com') {
+      const tweetImage = await extractTwitterImage(url);
+      if (tweetImage) return tweetImage;
+    }
+
+    // YouTube - construct thumbnail URL from video ID
+    if (hostname === 'youtube.com' || hostname === 'www.youtube.com' ||
+        hostname === 'm.youtube.com' || hostname === 'youtu.be') {
+      const ytImage = extractYouTubeImage(url);
+      if (ytImage) return ytImage;
+    }
+
+    // Fall back to og:image from HTML
+    if (html) {
+      const ogImage = extractOgImage(html);
+      if (ogImage && !isGenericImage(ogImage)) {
+        return ogImage;
+      }
+    }
+
+    return null;
+  } catch (e) {
+    console.error('[ImageStorage] Error extracting image URL:', e.message);
+    return html ? extractOgImage(html) : null;
+  }
+}
+
+/**
+ * Extract image from Twitter/X using syndication API
+ * @param {string} url - The tweet URL
+ * @returns {Promise<string|null>}
+ */
+async function extractTwitterImage(url) {
+  try {
+    // Extract tweet ID from URL
+    const match = url.match(/status\/(\d+)/);
+    if (!match) return null;
+
+    const tweetId = match[1];
+    console.log(`[ImageStorage] Fetching Twitter image for tweet ${tweetId}`);
+
+    const response = await fetch(
+      `https://cdn.syndication.twimg.com/tweet-result?id=${tweetId}&token=0`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; TabVault/1.0)',
+        },
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+
+    if (!response.ok) {
+      console.log(`[ImageStorage] Twitter API returned ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    // Look for media in the response
+    if (data.mediaDetails && data.mediaDetails.length > 0) {
+      const media = data.mediaDetails[0];
+      // Prefer the highest quality image
+      if (media.media_url_https) {
+        return media.media_url_https;
+      }
+    }
+
+    // Try photos array
+    if (data.photos && data.photos.length > 0) {
+      return data.photos[0].url;
+    }
+
+    return null;
+  } catch (e) {
+    console.error('[ImageStorage] Twitter image extraction failed:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Extract YouTube thumbnail from video URL
+ * @param {string} url - The YouTube URL
+ * @returns {string|null}
+ */
+function extractYouTubeImage(url) {
+  try {
+    const parsed = new URL(url);
+    let videoId = null;
+
+    // Handle youtu.be/VIDEO_ID
+    if (parsed.hostname === 'youtu.be') {
+      videoId = parsed.pathname.slice(1).split('/')[0];
+    }
+    // Handle youtube.com/watch?v=VIDEO_ID
+    else if (parsed.searchParams.has('v')) {
+      videoId = parsed.searchParams.get('v');
+    }
+    // Handle youtube.com/embed/VIDEO_ID
+    else if (parsed.pathname.startsWith('/embed/')) {
+      videoId = parsed.pathname.split('/')[2];
+    }
+    // Handle youtube.com/shorts/VIDEO_ID
+    else if (parsed.pathname.startsWith('/shorts/')) {
+      videoId = parsed.pathname.split('/')[2];
+    }
+
+    if (videoId) {
+      // Use maxresdefault for highest quality, falls back gracefully
+      return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+    }
+
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Extract og:image URL from HTML (fallback method)
  * @param {string} html - Raw HTML content
  * @returns {string|null} - The og:image URL or null
  */

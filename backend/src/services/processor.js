@@ -6,7 +6,7 @@ import { scrapeUrl, isScrapeable, extractAuthor } from './scraper.js';
 import { processContent, generateDisplayTitle, extractInsights, isConfigured as isAiConfigured } from './ai.js';
 import { generateCaptureEmbedding, formatForPgVector, isConfigured as isEmbeddingsConfigured } from './embeddings.js';
 import { detectSourcePlatform } from './sourceDetector.js';
-import { extractOgImage, storeImage } from './imageStorage.js';
+import { extractImageUrl, storeImage } from './imageStorage.js';
 
 /**
  * Process a single capture through the AI pipeline
@@ -65,12 +65,12 @@ export async function processCapture(captureId) {
       console.log(`[Processor] Extracted author: ${authorName}`);
     }
 
-    // Extract and store og:image
+    // Extract and store image (platform-specific APIs + og:image fallback)
     let imageUrl = null;
-    const ogImageUrl = extractOgImage(rawHtml);
-    if (ogImageUrl) {
-      console.log(`[Processor] Found og:image: ${ogImageUrl}`);
-      const imageResult = await storeImage(ogImageUrl, captureId);
+    const sourceImageUrl = await extractImageUrl(capture.url, rawHtml);
+    if (sourceImageUrl) {
+      console.log(`[Processor] Found image: ${sourceImageUrl}`);
+      const imageResult = await storeImage(sourceImageUrl, captureId);
       if (imageResult.success) {
         imageUrl = imageResult.url;
         console.log(`[Processor] Stored image: ${imageUrl}`);
