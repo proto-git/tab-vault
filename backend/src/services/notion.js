@@ -158,6 +158,107 @@ function mapCaptureToProperties(capture) {
 }
 
 /**
+ * Build page content blocks for Notion
+ * @param {object} capture - The capture object
+ * @returns {array} - Array of Notion blocks
+ */
+function buildPageContent(capture) {
+  const blocks = [];
+
+  // Add image if available (at the top for visual impact)
+  if (capture.image_url) {
+    blocks.push({
+      object: 'block',
+      type: 'image',
+      image: {
+        type: 'external',
+        external: {
+          url: capture.image_url,
+        },
+      },
+    });
+  }
+
+  // Add summary paragraph
+  if (capture.summary) {
+    blocks.push({
+      object: 'block',
+      type: 'paragraph',
+      paragraph: {
+        rich_text: [
+          {
+            type: 'text',
+            text: {
+              content: capture.summary,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  // Add key takeaways if available
+  if (capture.key_takeaways && capture.key_takeaways.length > 0) {
+    blocks.push({
+      object: 'block',
+      type: 'heading_3',
+      heading_3: {
+        rich_text: [{ type: 'text', text: { content: 'Key Takeaways' } }],
+      },
+    });
+
+    for (const takeaway of capture.key_takeaways) {
+      blocks.push({
+        object: 'block',
+        type: 'bulleted_list_item',
+        bulleted_list_item: {
+          rich_text: [{ type: 'text', text: { content: takeaway } }],
+        },
+      });
+    }
+  }
+
+  // Add action items if available
+  if (capture.action_items && capture.action_items.length > 0) {
+    blocks.push({
+      object: 'block',
+      type: 'heading_3',
+      heading_3: {
+        rich_text: [{ type: 'text', text: { content: 'Action Items' } }],
+      },
+    });
+
+    for (const action of capture.action_items) {
+      blocks.push({
+        object: 'block',
+        type: 'to_do',
+        to_do: {
+          rich_text: [{ type: 'text', text: { content: action } }],
+          checked: false,
+        },
+      });
+    }
+  }
+
+  // Add divider and bookmark
+  blocks.push({
+    object: 'block',
+    type: 'divider',
+    divider: {},
+  });
+
+  blocks.push({
+    object: 'block',
+    type: 'bookmark',
+    bookmark: {
+      url: capture.url,
+    },
+  });
+
+  return blocks;
+}
+
+/**
  * Sync a single capture to Notion
  * @param {object} capture - The capture object from database
  * @param {object} options - Optional: { apiKey, databaseId } for multi-workspace
@@ -185,50 +286,14 @@ export async function syncCapture(capture, options = {}) {
         updated: true,
       };
     } else {
-      // Create new page
+      // Create new page with rich content
       const response = await client.pages.create({
         parent: {
           type: 'database_id',
           database_id: databaseId,
         },
         properties: mapCaptureToProperties(capture),
-        // Add page content with the full summary
-        children: capture.summary ? [
-          {
-            object: 'block',
-            type: 'paragraph',
-            paragraph: {
-              rich_text: [
-                {
-                  type: 'text',
-                  text: {
-                    content: capture.summary,
-                  },
-                },
-              ],
-            },
-          },
-          {
-            object: 'block',
-            type: 'divider',
-            divider: {},
-          },
-          {
-            object: 'block',
-            type: 'bookmark',
-            bookmark: {
-              url: capture.url,
-            },
-          },
-        ] : [
-          {
-            object: 'block',
-            type: 'bookmark',
-            bookmark: {
-              url: capture.url,
-            },
-          },
-        ],
+        children: buildPageContent(capture),
       });
 
       console.log(`[Notion] Created page ${response.id}`);

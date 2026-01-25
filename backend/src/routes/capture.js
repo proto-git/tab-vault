@@ -8,6 +8,7 @@ import { getSettingsWithOptions, updateSettings } from '../services/settings.js'
 import { getCategories, addCategory, updateCategory, deleteCategory } from '../services/categories.js';
 import { getTagsWithCounts, deleteTag, mergeTags, renameTag } from '../services/tags.js';
 import { isConfigured as isNotionConfigured, testConnection as testNotionConnection, syncCapture, syncMultiple } from '../services/notion.js';
+import { deleteImages } from '../services/imageStorage.js';
 
 const router = express.Router();
 
@@ -119,7 +120,7 @@ router.get('/search', async (req, res, next) => {
     // Basic text search (Phase 3 will add vector/semantic search)
     let queryBuilder = supabase
       .from('captures')
-      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name')
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name, image_url')
       .or(`title.ilike.%${query}%,summary.ilike.%${query}%,content.ilike.%${query}%`);
 
     // Apply source filter if provided
@@ -217,7 +218,7 @@ router.get('/recent', async (req, res, next) => {
 
     let queryBuilder = supabase
       .from('captures')
-      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name');
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name, image_url');
 
     // Apply source filter if provided
     if (source) {
@@ -373,7 +374,7 @@ router.patch('/captures/:id', async (req, res, next) => {
       .from('captures')
       .update(updates)
       .eq('id', id)
-      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name')
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name, image_url')
       .single();
 
     if (error) {
@@ -859,6 +860,94 @@ router.post('/notion/sync-all', async (req, res, next) => {
       synced: results.success,
       failed: results.failed,
       errors: results.errors,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============ Image Cleanup ============
+
+// POST /api/cleanup-images - Delete stale images from storage
+// Deletes images for captures that are:
+// 1. Not synced to Notion AND
+// 2. Older than X days (default 30)
+router.post('/cleanup-images', async (req, res, next) => {
+  try {
+    const daysOld = Math.max(parseInt(req.query.days) || 30, 7); // Minimum 7 days
+    const dryRun = req.query.dry_run === 'true';
+
+    if (!isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Supabase not configured',
+      });
+    }
+
+    // Calculate cutoff date
+    const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000).toISOString();
+
+    // Find captures with images that are:
+    // - Not synced to Notion
+    // - Older than cutoff date
+    // - Have an image_url
+    const { data: staleCaptures, error: fetchError } = await supabase
+      .from('captures')
+      .select('id, image_url, created_at')
+      .not('image_url', 'is', null)
+      .or('notion_synced.is.null,notion_synced.eq.false')
+      .lt('created_at', cutoffDate);
+
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    if (!staleCaptures || staleCaptures.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No stale images to clean up',
+        deleted: 0,
+        dryRun,
+      });
+    }
+
+    // Extract filenames from image URLs
+    // URLs are like: https://xxx.supabase.co/storage/v1/object/public/capture-images/uuid.jpg
+    const filenames = staleCaptures
+      .map(c => {
+        const match = c.image_url.match(/capture-images\/(.+)$/);
+        return match ? match[1] : null;
+      })
+      .filter(Boolean);
+
+    if (dryRun) {
+      return res.json({
+        success: true,
+        message: `Would delete ${filenames.length} images`,
+        dryRun: true,
+        captures: staleCaptures.map(c => ({ id: c.id, created_at: c.created_at })),
+      });
+    }
+
+    // Delete images from storage
+    const deleteResult = await deleteImages(filenames);
+
+    // Clear image_url from captures
+    if (deleteResult.success > 0) {
+      const idsToUpdate = staleCaptures.map(c => c.id);
+      await supabase
+        .from('captures')
+        .update({ image_url: null })
+        .in('id', idsToUpdate);
+    }
+
+    console.log(`[Cleanup] Deleted ${deleteResult.success} stale images (${daysOld}+ days old, not synced to Notion)`);
+
+    res.json({
+      success: true,
+      deleted: deleteResult.success,
+      failed: deleteResult.failed,
+      daysOld,
     });
   } catch (error) {
     next(error);
