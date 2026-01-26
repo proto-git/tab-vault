@@ -12,6 +12,7 @@
 - [Backend Enhancements](#backend-enhancements)
 - [Frontend & UX](#frontend--ux)
 - [Integrations](#integrations)
+- [Capture & Share Ecosystem](#capture--share-ecosystem)
 - [Quick Reference](#quick-reference)
 
 ---
@@ -354,6 +355,101 @@
 
 ---
 
+## Capture & Share Ecosystem
+
+> These features work together to create a complete capture-from-anywhere, share-anywhere workflow.
+
+### 31. Omni-Capture
+**Multi-System URL Capture via Discord, Slack, Email, SMS**
+
+| | |
+|---|---|
+| **Description** | Capture URLs from anywhere in your digital life by sending them to a Discord bot, Slack channel, email address, or SMS number |
+| **Technical Approach** | Create multiple ingestion endpoints: (1) **Discord Bot** - listens for URLs in designated channel or DMs, extracts and sends to capture API; (2) **Slack App** - message action or channel listener for URL capture; (3) **Email Ingest** - dedicated email address (e.g., `capture@tabvault.app`) that parses URLs from email body; (4) **SMS/iMessage** - Twilio webhook for phone-based capture. All routes to unified `POST /api/capture` with `source_platform` set appropriately. |
+| **Complexity** | Medium-High |
+
+**Sub-features:**
+- `POST /api/capture/webhook` - Generic webhook endpoint for any service
+- Discord bot with `/capture <url>` slash command
+- Slack app with "Save to Tab Vault" message action
+- Email parser service (could use Mailgun/SendGrid inbound)
+- iOS Shortcut for quick sharing from any app
+
+---
+
+### 32. Share Studio
+**Turn Captures into Platform-Ready Social Content**
+
+| | |
+|---|---|
+| **Description** | Transform any capture (or group of captures) into ready-to-post content for Twitter, LinkedIn, newsletters, or blogs - with AI-generated visuals via Nano Banana |
+| **Technical Approach** | New `/api/captures/:id/share` endpoint with `platform` parameter (twitter, linkedin, newsletter, blog). AI generates platform-optimized content using summary, takeaways, and optionally Nano Banana infographic. **Twitter**: Thread format with hooks and hashtags. **LinkedIn**: Professional tone with insights. **Newsletter**: Section-ready with context. Returns formatted content + optional generated image URL. Frontend "Share Studio" modal with platform tabs, preview, and one-click copy. |
+| **Complexity** | Medium |
+
+**Synergy with other features:**
+- **Nano Banana** - Generate infographics to accompany posts
+- **Vision Vault** - Include insights from captured images
+- **Thread Weaver** - Core engine for Twitter thread generation
+- **Smart Collections** - Share entire collections as curated lists
+
+---
+
+### 33. Capture Collections for Sharing
+**Curated Lists for Public or Team Sharing**
+
+| | |
+|---|---|
+| **Description** | Create shareable collections of captures with public links, embeddable widgets, or team collaboration |
+| **Technical Approach** | Extend collections with `is_public`, `share_slug`, `collaborator_ids`. Public collections get `/c/:slug` URL showing read-only view. Generate embed code for blogs/Notion. Add "Add to Collection" action in capture modal. Team features: invite collaborators, shared capture inbox. API: `POST /api/collections/:id/share`, `GET /api/public/collections/:slug`. |
+| **Complexity** | Medium-High |
+
+---
+
+### Feature Synergy Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CAPTURE SOURCES                              │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
+│  │ Browser │ │ Discord │ │  Slack  │ │  Email  │ │   SMS   │   │
+│  │Extension│ │   Bot   │ │   App   │ │ Ingest  │ │ Twilio  │   │
+│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘   │
+│       └──────────┬┴──────────┬┴──────────┬┴──────────┬┘        │
+│                  ▼           ▼           ▼           ▼          │
+│              ┌─────────────────────────────────────┐            │
+│              │     Omni-Capture (POST /api/capture)│            │
+│              └─────────────────┬───────────────────┘            │
+└────────────────────────────────┼────────────────────────────────┘
+                                 ▼
+┌────────────────────────────────┼────────────────────────────────┐
+│                    AI PROCESSING PIPELINE                       │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
+│  │ Scrape & │ │ Summarize│ │ Vision   │ │ Embed & Related  │   │
+│  │ Extract  │→│ Categorize│→│ Vault    │→│ Captures         │   │
+│  │ Image    │ │ Takeaways│ │ Analysis │ │                  │   │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────────────┘   │
+└────────────────────────────────┼────────────────────────────────┘
+                                 ▼
+┌────────────────────────────────┼────────────────────────────────┐
+│                    SHARE DESTINATIONS                           │
+│              ┌─────────────────┴───────────────────┐            │
+│              │        Share Studio                 │            │
+│              └─────────────────┬───────────────────┘            │
+│       ┌──────────┬─────────────┼─────────────┬──────────┐      │
+│       ▼          ▼             ▼             ▼          ▼      │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  │
+│  │ Twitter │ │LinkedIn │ │ Notion  │ │Newsletter│ │ Public  │  │
+│  │ Thread  │ │  Post   │ │  Sync   │ │ Section │ │  Link   │  │
+│  │ +Image  │ │ +Image  │ │ +Image  │ │         │ │ /c/slug │  │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘  │
+│       │          │             │             │          │      │
+│       └──────────┴──Nano Banana┴─────────────┴──────────┘      │
+│                   (AI Infographic)                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Quick Reference
 
 ### By Complexity
@@ -361,8 +457,8 @@
 | Low | Low-Medium | Medium | Medium-High | High |
 |-----|------------|--------|-------------|------|
 | Thread Weaver | Duplicate Detective | Vision Vault | Obsidian Sync | Nano Banana |
-| TLDR on Demand | Tag Galaxy | Smart Collections | | Learning Paths |
-| Reading Time | Activity Map | Insight Digest | | Bundles |
+| TLDR on Demand | Tag Galaxy | Smart Collections | Omni-Capture | Learning Paths |
+| Reading Time | Activity Map | Insight Digest | Capture Collections | Bundles |
 | | Time Machine | Context Companion | | Knowledge Graph |
 | | | Time Capsules | | Connection Finder |
 | | | Stale Check | | |
@@ -377,16 +473,19 @@
 | | | Readwise Sync | | |
 | | | Slack Vault | | |
 | | | Webhook Hub | | |
+| | | **Share Studio** | | |
 
 ### Most Impactful (Recommended Priority)
 
-1. **Nano Banana** - Unique visual differentiation
-2. **Vision Vault** - Unlocks image content for search
-3. **Smart Collections** - Better organization
-4. **Commander** - Power user retention
-5. **Reading Queue (Stack)** - Core workflow feature
-6. **Obsidian Sync** - Popular PKM integration
-7. **Weekly Digest** - Engagement driver
+1. **Nano Banana** - Unique visual differentiation, enables Share Studio
+2. **Vision Vault** - Unlocks image content for search, enhances all AI features
+3. **Omni-Capture** - Capture from anywhere in your digital life
+4. **Share Studio** - Complete content-to-social pipeline (uses Thread Weaver + Nano Banana)
+5. **Smart Collections** - Better organization, enables sharing collections
+6. **Commander** - Power user retention with Cmd+K
+7. **Reading Queue (Stack)** - Core workflow feature
+8. **Obsidian Sync** - Popular PKM integration
+9. **Weekly Digest** - Engagement driver
 
 ---
 
