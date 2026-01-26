@@ -120,7 +120,7 @@ Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech
 
 ---
 
-## Current Status (Jan 24, 2026)
+## Current Status (Jan 26, 2026)
 
 **Completed features:**
 - Phase 1: Chrome extension + Express backend + Supabase
@@ -171,7 +171,7 @@ Single-workspace Notion sync via environment variables:
 - `NOTION_DATABASE_ID` - Target database
 
 Database schema for Notion:
-- Title, URL, Summary (rich_text), Category (select), Tags (multi_select), Quality (number), Captured (date)
+- Name (title), URL, Summary (rich_text), Category (select), Tags (multi_select), Quality (number), Captured (date)
 
 Sync service designed for future multi-workspace - accepts optional `apiKey` and `databaseId` params.
 

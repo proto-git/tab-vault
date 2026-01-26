@@ -10,19 +10,27 @@ Browser tab hoarding - you keep tabs open because you fear losing information. T
 
 - **One-click capture** - Click the extension or press `Ctrl+Shift+S` to save any tab
 - **AI summarization** - Automatic 2-3 sentence summaries of captured content
-- **Auto-categorization** - Content is sorted into: learning, work, project, news, reference
-- **Quality scoring** - AI rates content quality and actionability (1-10)
-- **RAG search** - Semantic search to find content even without exact keywords
-- **Notion sync** - High-quality items automatically sync to your Notion database
+- **Smart categorization** - Content sorted into customizable categories
+- **Auto-tagging** - AI generates relevant tags for each capture
+- **Quality scoring** - AI rates content quality (1-10)
+- **Semantic search** - Find content by meaning, not just keywords
+- **Notion sync** - Sync captures to your Notion database with one click
+- **Cost tracking** - Monitor AI usage and costs in the dashboard
+- **Model selection** - Choose between Claude Haiku, Sonnet, or GPT-4o-mini
+
+## Live Demo
+
+- **Dashboard**: https://vault.wireforge.dev
+- **Backend API**: Deployed on Railway
 
 ## Architecture
 
 ```
-Chrome Extension → Cloud Backend (Railway) → Supabase (PostgreSQL + pgvector)
-                                          ↓
-                              OpenRouter (AI) + OpenAI (Embeddings)
-                                          ↓
-                                   Notion API (sync)
+Chrome Extension → Backend API (Railway) → Supabase (PostgreSQL + pgvector)
+                                        ↓
+                           OpenRouter (Claude/GPT) + OpenAI (Embeddings)
+                                        ↓
+                                 Notion API (sync)
 ```
 
 ## Quick Start
@@ -32,20 +40,21 @@ Chrome Extension → Cloud Backend (Railway) → Supabase (PostgreSQL + pgvector
 1. Create a free account at [supabase.com](https://supabase.com)
 2. Create a new project
 3. Go to SQL Editor and run the contents of `database/schema.sql`
-4. Go to Project Settings > API and copy your URL and anon key
+4. Run migrations in `database/migrations/` in order
+5. Go to Project Settings > API and copy your URL and anon key
 
 ### 2. Set up the Backend
 
 ```bash
 cd backend
 cp .env.example .env
-# Edit .env with your Supabase credentials
+# Edit .env with your credentials (see Environment Variables below)
 
 npm install
 npm run dev
 ```
 
-Backend runs at http://localhost:3001
+Backend runs at http://localhost:8080
 
 ### 3. Load the Extension
 
@@ -53,13 +62,21 @@ Backend runs at http://localhost:3001
 2. Enable "Developer mode" (top right toggle)
 3. Click "Load unpacked"
 4. Select the `extension` folder
+5. Click the extension icon → Settings → Set your API URL
 
-### 4. Test It!
+### 4. Set up Notion (Optional)
 
-1. Open any webpage
-2. Click the Tab Vault extension icon (or press `Ctrl+Shift+S`)
-3. Click "Capture This Tab"
-4. Check your Supabase dashboard - you should see the captured URL!
+1. Create a [Notion integration](https://www.notion.so/my-integrations)
+2. Create a database with these properties:
+   - **Name** (title) - Required, Notion's default
+   - **URL** (url)
+   - **Summary** (rich_text)
+   - **Category** (select)
+   - **Tags** (multi_select)
+   - **Quality** (number)
+   - **Captured** (date)
+3. Share the database with your integration
+4. Add `NOTION_API_KEY` and `NOTION_DATABASE_ID` to your environment
 
 ## Project Structure
 
@@ -75,55 +92,56 @@ tab-vault/
 │   ├── src/
 │   │   ├── index.js     # Server entry point
 │   │   ├── routes/      # API endpoints
-│   │   └── services/    # Supabase, AI, etc.
+│   │   ├── services/    # AI, embeddings, Notion, etc.
+│   │   └── config/      # Model definitions
 │   └── package.json
 │
-├── database/            # Database schema
-│   └── schema.sql       # Supabase SQL schema
+├── frontend/            # Search dashboard (vanilla JS)
+│   └── index.html       # Single-page app
 │
-└── frontend/            # Search web app (Phase 3)
-    └── (coming soon)
+└── database/            # Database schema
+    ├── schema.sql       # Main Supabase schema
+    └── migrations/      # Incremental migrations
 ```
 
-## Implementation Phases
-
-### Phase 1: Core Intake (Current)
-- [x] Chrome extension with keyboard shortcut
-- [x] Express backend with capture endpoint
-- [x] Supabase storage
-- [ ] Deploy to Railway
-
-### Phase 2: AI Processing
-- [ ] Web scraping with Playwright
-- [ ] Summarization via OpenRouter
-- [ ] Auto-categorization
-- [ ] Generate embeddings
-
-### Phase 3: Search Interface
-- [ ] React web app
-- [ ] Semantic search via pgvector
-- [ ] Extension popup search
-
-### Phase 4: Notion Integration
-- [ ] Notion API client
-- [ ] Auto-sync high-score items
-- [ ] Weekly digest
-
-## Configuration
-
-### Extension Settings
-
-Click "Settings" in the extension popup to configure:
-- **API URL**: Backend URL (default: http://localhost:3001/api)
-
-### Environment Variables
+## Environment Variables
 
 Backend `.env`:
-```
+```bash
+# Required
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
-PORT=3001
+PORT=8080
+
+# AI Processing
+OPENROUTER_API_KEY=your-openrouter-key
+OPENAI_API_KEY=your-openai-key  # For embeddings
+
+# Notion Sync (optional)
+NOTION_API_KEY=secret_xxx
+NOTION_DATABASE_ID=your-database-id
 ```
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/capture` | Capture a URL |
+| GET | `/api/recent` | Get recent captures |
+| GET | `/api/search?q=` | Keyword search |
+| GET | `/api/semantic-search?q=` | Semantic/vector search |
+| GET | `/api/capture/:id` | Get single capture |
+| PATCH | `/api/captures/:id` | Update category/tags |
+| DELETE | `/api/capture/:id` | Delete capture |
+| GET | `/api/status` | Service health check |
+| GET | `/api/usage` | AI usage statistics |
+| GET/PUT | `/api/settings` | Model selection |
+| GET/POST/PUT/DELETE | `/api/categories` | Category management |
+| GET/DELETE | `/api/tags` | Tag management |
+| POST | `/api/tags/merge` | Merge tags |
+| GET | `/api/notion/status` | Notion connection status |
+| POST | `/api/notion/sync/:id` | Sync single capture |
+| POST | `/api/notion/sync-all` | Bulk sync captures |
 
 ## Keyboard Shortcuts
 
@@ -132,26 +150,61 @@ PORT=3001
 | `Ctrl+Shift+S` (Win/Linux) | Capture current tab |
 | `Cmd+Shift+S` (Mac) | Capture current tab |
 
+## Implementation Status
+
+### Phase 1: Core Intake ✅
+- [x] Chrome extension with keyboard shortcut
+- [x] Express backend with capture endpoint
+- [x] Supabase storage
+- [x] Deploy to Railway
+
+### Phase 2: AI Processing ✅
+- [x] Web scraping with Playwright
+- [x] Summarization via OpenRouter (Claude/GPT)
+- [x] Auto-categorization with custom categories
+- [x] Auto-tagging
+- [x] Quality scoring
+- [x] Generate embeddings (OpenAI)
+- [x] Cost/usage tracking
+
+### Phase 3: Search Interface ✅
+- [x] Web dashboard with filters
+- [x] Semantic search via pgvector
+- [x] Category/tag management
+- [x] Light/dark mode
+- [x] Capture detail modal with editing
+
+### Phase 4: Notion Integration ✅
+- [x] Notion API client
+- [x] One-click sync from dashboard
+- [x] Bulk sync endpoint
+
 ## Cost Estimate
 
 | Component | Free Tier | Paid |
 |-----------|-----------|------|
-| Railway | - | ~$10-15/mo |
+| Railway | 500 hrs/mo | ~$5-10/mo |
 | Supabase | 500MB | $25/mo |
 | OpenRouter | - | ~$5-10/mo |
 | OpenAI Embeddings | - | ~$2-5/mo |
-| **Total** | $0 (limited) | ~$40-55/mo |
+| Vercel (frontend) | Hobby free | - |
+| **Total** | $0 (limited) | ~$35-50/mo |
 
 ## Development
 
 ```bash
-# Backend development
+# Backend development (with auto-reload)
 cd backend
-npm run dev  # Starts with --watch for auto-reload
+npm run dev
 
-# Generate extension icons
-# (Use any SVG to PNG converter on extension/icons/icon.svg)
+# Frontend is static - just open index.html or deploy to Vercel
 ```
+
+## Deployment
+
+- **Backend**: Push to master → Railway auto-deploys
+- **Frontend**: Push to master → Vercel auto-deploys
+- **Database**: Run migrations manually in Supabase SQL Editor
 
 ## License
 
