@@ -10,10 +10,14 @@ Browser tab hoarding - you keep tabs open because you fear losing information. T
 
 - **One-click capture** - Click the extension or press `Ctrl+Shift+S` to save any tab
 - **AI summarization** - Automatic 2-3 sentence summaries of captured content
+- **Key takeaways & action items** - AI extracts actionable insights
 - **Smart categorization** - Content sorted into customizable categories
 - **Auto-tagging** - AI generates relevant tags for each capture
 - **Quality scoring** - AI rates content quality (1-10)
+- **Source detection** - Identifies platform (Twitter, YouTube, GitHub, etc.) and author
+- **Image extraction** - Captures og:image, Twitter media, YouTube thumbnails
 - **Semantic search** - Find content by meaning, not just keywords
+- **Related captures** - Discover similar content via vector similarity
 - **Notion sync** - Sync captures to your Notion database with one click
 - **Cost tracking** - Monitor AI usage and costs in the dashboard
 - **Model selection** - Choose between Claude Haiku, Sonnet, or GPT-4o-mini
@@ -92,7 +96,7 @@ tab-vault/
 │   ├── src/
 │   │   ├── index.js     # Server entry point
 │   │   ├── routes/      # API endpoints
-│   │   ├── services/    # AI, embeddings, Notion, etc.
+│   │   ├── services/    # AI, embeddings, Notion, image storage, etc.
 │   │   └── config/      # Model definitions
 │   └── package.json
 │
@@ -139,9 +143,11 @@ NOTION_DATABASE_ID=your-database-id
 | GET/POST/PUT/DELETE | `/api/categories` | Category management |
 | GET/DELETE | `/api/tags` | Tag management |
 | POST | `/api/tags/merge` | Merge tags |
+| GET | `/api/captures/:id/related` | Semantically related captures |
 | GET | `/api/notion/status` | Notion connection status |
 | POST | `/api/notion/sync/:id` | Sync single capture |
 | POST | `/api/notion/sync-all` | Bulk sync captures |
+| POST | `/api/cleanup-images` | Delete stale images from storage |
 
 ## Keyboard Shortcuts
 

@@ -23,7 +23,8 @@ backend/            Node.js + Express API (deployed on Railway)
   │   │   ├── tags.js       Tag aggregation/merge
   │   │   ├── settings.js   User preferences
   │   │   ├── usage.js      Cost tracking
-  │   │   └── notion.js     Notion sync service
+  │   │   ├── notion.js     Notion sync service
+  │   │   └── imageStorage.js  og:image extraction & Supabase Storage
   │   └── config/
   │       └── models.js     AI model definitions
 
@@ -50,9 +51,11 @@ database/           Supabase (PostgreSQL + pgvector)
 - `GET/POST/DELETE /api/categories` - Category management
 - `GET/DELETE /api/tags` - Tag management
 - `POST /api/tags/merge` - Merge tags
+- `GET /api/captures/:id/related` - Semantically related captures
 - `GET /api/notion/status` - Check Notion connection
 - `POST /api/notion/sync/:id` - Sync capture to Notion
 - `POST /api/notion/sync-all?limit=50` - Bulk sync unsynced captures
+- `POST /api/cleanup-images` - Delete stale images from Supabase Storage
 
 ## Development
 
@@ -135,6 +138,12 @@ Now tracked in Linear tech-debt project: https://linear.app/alucent/project/tech
 - ALU-28: Fixed dropdown positioning in modal
 - ALU-29: Clean AI summaries (no markdown)
 - ALU-32: Notion sync integration with sync button in modal
+- Source platform detection and filtering
+- Author name extraction
+- Key takeaways and action items from AI
+- Image extraction (og:image, Twitter API, YouTube thumbnails) with Supabase Storage
+- Related captures via semantic similarity
+- Image cleanup endpoint for stale images
 
 **Deployments:**
 - Frontend: https://vault.wireforge.dev (Vercel)
