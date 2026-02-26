@@ -210,7 +210,41 @@ npm run dev
 
 - **Backend**: Push to master → Railway auto-deploys
 - **Frontend**: Push to master → Vercel auto-deploys
-- **Database**: Run migrations manually in Supabase SQL Editor
+- **Database**: Use Supabase CLI migrations (or SQL Editor fallback)
+
+## Supabase CLI Workflow
+
+This repo is wired so Supabase CLI reads migrations from:
+
+- `supabase/migrations` → symlink to `database/migrations`
+
+One-time setup on your machine:
+
+```bash
+# 1) Authenticate CLI
+supabase login
+
+# 2) Link this repo to the hosted project
+supabase link --project-ref qxflrkojvsjovxiyceua
+# You will be prompted for your remote DB password
+```
+
+Daily migration workflow:
+
+```bash
+# Preview what would be applied
+supabase db push --dry-run --linked
+
+# Apply migrations
+supabase db push --linked
+```
+
+Optional local validation (requires Docker):
+
+```bash
+supabase start
+supabase db push --dry-run --local
+```
 
 ## License
 
