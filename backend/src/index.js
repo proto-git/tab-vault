@@ -4,6 +4,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import captureRouter from './routes/capture.js';
+import { authGate, isAuthEnforced } from './middleware/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -47,7 +48,7 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
-app.use('/api', captureRouter);
+app.use('/api', authGate, captureRouter);
 
 // Error handling
 app.use((err, req, res, next) => {
@@ -67,10 +68,11 @@ app.listen(PORT, () => {
 ║   Server running on port ${PORT}            ║
 ║   http://localhost:${PORT}                  ║
 ║                                           ║
-║   Endpoints:                              ║
-║   POST /api/capture - Capture a URL       ║
-║   GET  /api/search  - Search captures     ║
-║   GET  /api/recent  - Recent captures     ║
+  ║   Endpoints:                              ║
+  ║   POST /api/capture - Capture a URL       ║
+  ║   GET  /api/search  - Search captures     ║
+  ║   GET  /api/recent  - Recent captures     ║
+  ║   Auth enforced: ${isAuthEnforced() ? 'yes' : 'no'}                    ║
 ╚═══════════════════════════════════════════╝
   `);
 });

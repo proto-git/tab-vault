@@ -1606,6 +1606,24 @@
     // Configuration
     const API_URL = 'https://backend-production-49f0.up.railway.app/api';
 
+    function buildAuthHeaders(headers = {}) {
+      const token = localStorage.getItem('supabaseAccessToken');
+      if (!token) {
+        return headers;
+      }
+      return {
+        ...headers,
+        Authorization: `Bearer ${token}`,
+      };
+    }
+
+    async function apiFetch(path, options = {}) {
+      return fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: buildAuthHeaders(options.headers || {}),
+      });
+    }
+
     // State
     let captures = [];
     let currentFilter = 'all';
@@ -1773,7 +1791,7 @@
         btn.disabled = true;
 
         try {
-          await fetch(`${API_URL}/reprocess/${currentCapture.id}`, { method: 'POST' });
+          await apiFetch(`/reprocess/${currentCapture.id}`, { method: 'POST' });
           await loadCaptures();
           closeModal();
         } catch (err) {
@@ -1789,7 +1807,7 @@
         if (!confirm('Delete this capture?')) return;
 
         try {
-          await fetch(`${API_URL}/capture/${currentCapture.id}`, { method: 'DELETE' });
+          await apiFetch(`/capture/${currentCapture.id}`, { method: 'DELETE' });
           await loadCaptures();
           closeModal();
         } catch (err) {
@@ -1806,7 +1824,7 @@
         btn.disabled = true;
 
         try {
-          const response = await fetch(`${API_URL}/notion/sync/${currentCapture.id}`, {
+          const response = await apiFetch(`/notion/sync/${currentCapture.id}`, {
             method: 'POST'
           });
           const data = await response.json();
@@ -1889,11 +1907,11 @@
       resultsTitle.textContent = 'Recent Captures';
 
       try {
-        let url = `${API_URL}/recent?limit=50`;
+        let path = '/recent?limit=50';
         if (currentSource) {
-          url += `&source=${encodeURIComponent(currentSource)}`;
+          path += `&source=${encodeURIComponent(currentSource)}`;
         }
-        const response = await fetch(url);
+        const response = await apiFetch(path);
         const data = await response.json();
         captures = data.results || [];
         updateCounts();
@@ -1912,7 +1930,7 @@
         const sourceParam = currentSource ? `&source=${encodeURIComponent(currentSource)}` : '';
 
         // Try semantic search first
-        const semanticRes = await fetch(`${API_URL}/semantic-search?q=${encodeURIComponent(query)}${sourceParam}`);
+        const semanticRes = await apiFetch(`/semantic-search?q=${encodeURIComponent(query)}${sourceParam}`);
         const semanticData = await semanticRes.json();
 
         if (semanticData.success && semanticData.results?.length > 0) {
@@ -1920,7 +1938,7 @@
           resultsCount.textContent = `${captures.length} results (semantic)`;
         } else {
           // Fall back to keyword search
-          const keywordRes = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}${sourceParam}`);
+          const keywordRes = await apiFetch(`/search?q=${encodeURIComponent(query)}${sourceParam}`);
           const keywordData = await keywordRes.json();
           captures = keywordData.results || [];
           resultsCount.textContent = `${captures.length} results (keyword)`;
@@ -1934,7 +1952,7 @@
 
     async function loadUsage() {
       try {
-        const response = await fetch(`${API_URL}/usage`);
+        const response = await apiFetch('/usage');
         const data = await response.json();
 
         if (data.today) {
@@ -1949,7 +1967,7 @@
 
     async function loadCategories() {
       try {
-        const response = await fetch(`${API_URL}/categories`);
+        const response = await apiFetch('/categories');
         const data = await response.json();
         if (data.success) {
           allCategories = data.categories;
@@ -1961,7 +1979,7 @@
 
     async function loadAllTags() {
       try {
-        const response = await fetch(`${API_URL}/tags`);
+        const response = await apiFetch('/tags');
         const data = await response.json();
         if (data.success) {
           allTags = data.tags.map(t => t.name);
@@ -1973,7 +1991,7 @@
 
     async function updateCapture(id, updates) {
       try {
-        const response = await fetch(`${API_URL}/captures/${id}`, {
+        const response = await apiFetch(`/captures/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updates)
@@ -2314,7 +2332,7 @@
       `;
 
       try {
-        const response = await fetch(`${API_URL}/captures/${captureId}/related?limit=5`);
+        const response = await apiFetch(`/captures/${captureId}/related?limit=5`);
         const data = await response.json();
 
         if (!data.success || !data.results || data.results.length === 0) {
@@ -2351,7 +2369,7 @@
             if (!capture) {
               // Fetch from API if not in current list
               try {
-                const res = await fetch(`${API_URL}/capture/${id}`);
+                const res = await apiFetch(`/capture/${id}`);
                 const data = await res.json();
                 if (data.success) {
                   capture = data.data;

@@ -9,33 +9,39 @@ import { getCategoryPrompt } from './categories.js';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 // Cache the current model (refreshed when settings change)
-let currentModelConfig = null;
+const currentModelConfig = new Map();
+
+function getCacheKey(userId) {
+  return userId || '__anonymous__';
+}
 
 /**
  * Get the current model config (from settings or default)
  */
-async function getCurrentModel() {
-  if (!currentModelConfig) {
+async function getCurrentModel(userId = null) {
+  const cacheKey = getCacheKey(userId);
+  if (!currentModelConfig.has(cacheKey)) {
     try {
-      currentModelConfig = await getSelectedModelConfig();
+      const selected = await getSelectedModelConfig(userId);
+      currentModelConfig.set(cacheKey, selected);
     } catch (err) {
       console.log('[AI] Using default model:', err.message);
-      currentModelConfig = getModelConfig(DEFAULT_MODEL);
+      currentModelConfig.set(cacheKey, getModelConfig(DEFAULT_MODEL));
     }
   }
-  return currentModelConfig;
+  return currentModelConfig.get(cacheKey);
 }
 
 /**
  * Clear cached model (call when settings change)
  */
 export function clearModelCache() {
-  currentModelConfig = null;
+  currentModelConfig.clear();
 }
 
 // Export model for usage tracking (returns current model ID)
 export function getModel() {
-  return currentModelConfig?.id || getModelConfig(DEFAULT_MODEL).id;
+  return currentModelConfig.get('__anonymous__')?.id || getModelConfig(DEFAULT_MODEL).id;
 }
 
 // Check if OpenRouter is configured
@@ -49,15 +55,16 @@ export function isConfigured() {
  * @param {string} userPrompt - User message
  * @param {string} operation - Operation name for usage tracking
  * @param {string|null} captureId - Capture ID for usage tracking
+ * @param {string|null} userId - User ID for usage tracking and model settings
  * @returns {Promise<{content: string, usage: {input: number, output: number}}>}
  */
-async function callOpenRouter(systemPrompt, userPrompt, operation = 'unknown', captureId = null) {
+async function callOpenRouter(systemPrompt, userPrompt, operation = 'unknown', captureId = null, userId = null) {
   if (!isConfigured()) {
     throw new Error('OpenRouter API key not configured');
   }
 
   // Get the selected model from settings
-  const modelConfig = await getCurrentModel();
+  const modelConfig = await getCurrentModel(userId);
 
   const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
@@ -94,6 +101,7 @@ async function callOpenRouter(systemPrompt, userPrompt, operation = 'unknown', c
   // Record usage asynchronously (don't block response)
   recordUsage({
     captureId,
+    userId,
     service: 'openrouter',
     model: modelConfig.id,
     operation,
@@ -114,7 +122,7 @@ async function callOpenRouter(systemPrompt, userPrompt, operation = 'unknown', c
  * @param {string|null} captureId - Capture ID for usage tracking
  * @returns {Promise<string>} - Summary
  */
-export async function summarize(title, content, captureId = null) {
+export async function summarize(title, content, captureId = null, userId = null) {
   const systemPrompt = `You are a concise summarizer. Create a 2-3 sentence summary that captures the key points and value of the content. Focus on what makes this content useful or interesting. Return plain text only - do not use markdown formatting, headers, or bullet points.`;
 
   const userPrompt = `Title: ${title}
@@ -124,7 +132,7 @@ ${content.slice(0, 8000)}
 
 Provide a 2-3 sentence summary:`;
 
-  const response = await callOpenRouter(systemPrompt, userPrompt, 'summarize', captureId);
+  const response = await callOpenRouter(systemPrompt, userPrompt, 'summarize', captureId, userId);
   return response.content;
 }
 
@@ -135,9 +143,9 @@ Provide a 2-3 sentence summary:`;
  * @param {string|null} captureId - Capture ID for usage tracking
  * @returns {Promise<{category: string, tags: string[]}>}
  */
-export async function categorize(title, content, captureId = null) {
+export async function categorize(title, content, captureId = null, userId = null) {
   // Get dynamic categories from database
-  const categoryList = await getCategoryPrompt();
+  const categoryList = await getCategoryPrompt(userId);
 
   const systemPrompt = `You categorize web content. Respond with JSON only, no other text.
 
@@ -155,7 +163,7 @@ ${content.slice(0, 4000)}
 
 Categorize this content:`;
 
-  const response = await callOpenRouter(systemPrompt, userPrompt, 'categorize', captureId);
+  const response = await callOpenRouter(systemPrompt, userPrompt, 'categorize', captureId, userId);
 
   try {
     // Extract JSON from response (handle markdown code blocks)
@@ -178,7 +186,7 @@ Categorize this content:`;
  * @param {string|null} captureId - Capture ID for usage tracking
  * @returns {Promise<{quality: number, actionability: number}>}
  */
-export async function score(title, summary, category, captureId = null) {
+export async function score(title, summary, category, captureId = null, userId = null) {
   const systemPrompt = `You rate content quality and actionability. Respond with JSON only.
 
 Quality (1-10): How valuable, well-written, and informative is this content?
@@ -201,7 +209,7 @@ Summary: ${summary}
 
 Rate this content:`;
 
-  const response = await callOpenRouter(systemPrompt, userPrompt, 'score', captureId);
+  const response = await callOpenRouter(systemPrompt, userPrompt, 'score', captureId, userId);
 
   try {
     const jsonMatch = response.content.match(/\{[\s\S]*\}/);
@@ -226,7 +234,7 @@ Rate this content:`;
  * @param {string|null} captureId - Capture ID for usage tracking
  * @returns {Promise<{takeaways: string[], actions: string[]}>}
  */
-export async function extractInsights(title, content, captureId = null) {
+export async function extractInsights(title, content, captureId = null, userId = null) {
   const systemPrompt = `Extract key insights from this content. Return JSON only:
 {"takeaways": ["3-5 key points"], "actions": ["0-3 actionable items if any"]}
 Keep each point concise (under 100 chars). Focus on unique/valuable insights.
@@ -239,7 +247,7 @@ ${content.slice(0, 6000)}
 
 Extract key takeaways and action items:`;
 
-  const response = await callOpenRouter(systemPrompt, userPrompt, 'insights', captureId);
+  const response = await callOpenRouter(systemPrompt, userPrompt, 'insights', captureId, userId);
 
   try {
     // Extract JSON from response (handle markdown code blocks)
@@ -265,7 +273,7 @@ Extract key takeaways and action items:`;
  * @param {string|null} captureId - Capture ID for usage tracking
  * @returns {Promise<string>} - Clean display title
  */
-export async function generateDisplayTitle(title, content, captureId = null) {
+export async function generateDisplayTitle(title, content, captureId = null, userId = null) {
   const systemPrompt = `You create concise, descriptive titles. Your task:
 1. Create a clean, readable title (max 80 characters)
 2. Remove platform prefixes (like "X:", "YouTube -", etc.)
@@ -282,7 +290,7 @@ ${content.slice(0, 1000)}
 
 Generate a clean title:`;
 
-  const response = await callOpenRouter(systemPrompt, userPrompt, 'title', captureId);
+  const response = await callOpenRouter(systemPrompt, userPrompt, 'title', captureId, userId);
 
   // Clean up the response (remove quotes if present)
   let cleanTitle = response.content.trim();
@@ -303,16 +311,16 @@ Generate a clean title:`;
  * @param {string|null} captureId - Capture ID for usage tracking
  * @returns {Promise<{summary: string, category: string, tags: string[], quality: number, actionability: number, displayTitle: string}>}
  */
-export async function processContent(title, content, captureId = null) {
+export async function processContent(title, content, captureId = null, userId = null) {
   // Run summarize, categorize, and title generation in parallel
   const [summary, categoryResult, displayTitle] = await Promise.all([
-    summarize(title, content, captureId),
-    categorize(title, content, captureId),
-    generateDisplayTitle(title, content, captureId),
+    summarize(title, content, captureId, userId),
+    categorize(title, content, captureId, userId),
+    generateDisplayTitle(title, content, captureId, userId),
   ]);
 
   // Score based on summary
-  const scores = await score(title, summary, categoryResult.category, captureId);
+  const scores = await score(title, summary, categoryResult.category, captureId, userId);
 
   return {
     summary,

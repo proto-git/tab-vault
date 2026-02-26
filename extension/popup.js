@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const usageStats = document.getElementById('usageStats');
   const apiUrlInput = document.getElementById('apiUrlInput');
   const saveApiUrl = document.getElementById('saveApiUrl');
+  const authTokenInput = document.getElementById('authTokenInput');
+  const saveAuthToken = document.getElementById('saveAuthToken');
 
   // Categories tab elements
   const categoriesList = document.getElementById('categoriesList');
@@ -138,6 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
     loadUsageStats();
     loadApiUrl();
+    loadAuthToken();
   }
 
   function showMainView() {
@@ -291,6 +294,18 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.storage.sync.set({ apiUrl: newUrl });
       showStatus(settingsStatus, true, 'API URL saved!');
     }
+  });
+
+  function loadAuthToken() {
+    chrome.storage.sync.get(['supabaseAccessToken'], (result) => {
+      authTokenInput.value = result.supabaseAccessToken || '';
+    });
+  }
+
+  saveAuthToken.addEventListener('click', () => {
+    const token = authTokenInput.value.trim();
+    chrome.storage.sync.set({ supabaseAccessToken: token });
+    showStatus(settingsStatus, true, token ? 'Auth token saved' : 'Auth token cleared');
   });
 
   // ============ Categories Tab ============

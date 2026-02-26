@@ -116,6 +116,7 @@ Backend `.env`:
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 PORT=8080
+AUTH_ENFORCE=false
 
 # AI Processing
 OPENROUTER_API_KEY=your-openrouter-key
@@ -125,6 +126,9 @@ OPENAI_API_KEY=your-openai-key  # For embeddings
 NOTION_API_KEY=secret_xxx
 NOTION_DATABASE_ID=your-database-id
 ```
+
+`AUTH_ENFORCE=false` keeps existing clients working while you roll out auth in each client.
+Set `AUTH_ENFORCE=true` to require `Authorization: Bearer <supabase_access_token>` on all `/api/*` routes.
 
 ## API Endpoints
 
@@ -148,6 +152,14 @@ NOTION_DATABASE_ID=your-database-id
 | POST | `/api/notion/sync/:id` | Sync single capture |
 | POST | `/api/notion/sync-all` | Bulk sync captures |
 | POST | `/api/cleanup-images` | Delete stale images from storage |
+
+Auth behavior:
+- `AUTH_ENFORCE=false`: token optional (staged rollout mode)
+- `AUTH_ENFORCE=true`: valid Supabase bearer token required for all `/api/*`
+
+Client token setup for enforced mode:
+- Extension: Settings -> `Supabase Access Token (Optional)` -> paste user access token.
+- Web dashboard: set `localStorage.supabaseAccessToken = "<token>"` in browser devtools.
 
 ## Keyboard Shortcuts
 

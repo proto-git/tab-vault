@@ -42,6 +42,7 @@ export function calculateCost(model, inputTokens, outputTokens = 0) {
  */
 export async function recordUsage({
   captureId = null,
+  userId = null,
   service,
   model,
   operation,
@@ -58,6 +59,7 @@ export async function recordUsage({
   try {
     const { error } = await supabase.from('usage').insert({
       capture_id: captureId,
+      user_id: userId,
       service,
       model,
       operation,
@@ -84,7 +86,7 @@ export async function recordUsage({
  * @param {number} daysBack - Number of days to look back
  * @returns {Promise<Object>} - Usage summary
  */
-export async function getUsageSummary(daysBack = 30) {
+export async function getUsageSummary(daysBack = 30, userId = null) {
   if (!isConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
@@ -92,7 +94,7 @@ export async function getUsageSummary(daysBack = 30) {
   try {
     // Get daily breakdown
     const { data: daily, error: dailyError } = await supabase
-      .rpc('get_daily_usage', { days_back: daysBack });
+      .rpc('get_daily_usage', { days_back: daysBack, filter_user_id: userId });
 
     if (dailyError) {
       throw dailyError;
@@ -100,7 +102,7 @@ export async function getUsageSummary(daysBack = 30) {
 
     // Get by service breakdown
     const { data: byService, error: serviceError } = await supabase
-      .rpc('get_usage_by_service', { days_back: daysBack });
+      .rpc('get_usage_by_service', { days_back: daysBack, filter_user_id: userId });
 
     if (serviceError) {
       throw serviceError;
@@ -130,7 +132,7 @@ export async function getUsageSummary(daysBack = 30) {
  * Get today's usage
  * @returns {Promise<Object>} - Today's usage
  */
-export async function getTodayUsage() {
+export async function getTodayUsage(userId = null) {
   if (!isConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
@@ -138,10 +140,16 @@ export async function getTodayUsage() {
   try {
     const today = new Date().toISOString().split('T')[0];
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('usage')
       .select('service, model, operation, input_tokens, output_tokens, cost_cents')
       .gte('created_at', today);
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw error;

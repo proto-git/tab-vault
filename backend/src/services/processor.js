@@ -11,20 +11,26 @@ import { extractImageUrl, storeImage } from './imageStorage.js';
 /**
  * Process a single capture through the AI pipeline
  * @param {string} captureId - The capture ID to process
+ * @param {string|null} userId - Optional user ID to enforce ownership
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function processCapture(captureId) {
+export async function processCapture(captureId, userId = null) {
   if (!isSupabaseConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
 
   try {
     // 1. Fetch the capture
-    const { data: capture, error: fetchError } = await supabase
+    let fetchQuery = supabase
       .from('captures')
       .select('*')
-      .eq('id', captureId)
-      .single();
+      .eq('id', captureId);
+
+    if (userId) {
+      fetchQuery = fetchQuery.eq('user_id', userId);
+    }
+
+    const { data: capture, error: fetchError } = await fetchQuery.single();
 
     if (fetchError || !capture) {
       throw new Error(`Failed to fetch capture: ${fetchError?.message || 'Not found'}`);
@@ -33,10 +39,15 @@ export async function processCapture(captureId) {
     console.log(`[Processor] Processing capture: ${capture.title || capture.url}`);
 
     // 2. Update status to processing
-    await supabase
+    let processingStatusQuery = supabase
       .from('captures')
       .update({ status: 'processing' })
       .eq('id', captureId);
+
+    if (userId) {
+      processingStatusQuery = processingStatusQuery.eq('user_id', userId);
+    }
+    await processingStatusQuery;
 
     // 3. Scrape content (if URL is scrapeable)
     let content = '';
@@ -97,12 +108,14 @@ export async function processCapture(captureId) {
           processContent(
             capture.title || capture.url,
             content || capture.title || '',
-            captureId
+            captureId,
+            capture.user_id || null
           ),
           extractInsights(
             capture.title || capture.url,
             content || capture.title || '',
-            captureId
+            captureId,
+            capture.user_id || null
           ),
         ]);
 
@@ -146,10 +159,16 @@ export async function processCapture(captureId) {
     // 6. Update capture with results
     updates.status = 'completed';
 
-    const { error: updateError } = await supabase
+    let finalUpdateQuery = supabase
       .from('captures')
       .update(updates)
       .eq('id', captureId);
+
+    if (userId) {
+      finalUpdateQuery = finalUpdateQuery.eq('user_id', userId);
+    }
+
+    const { error: updateError } = await finalUpdateQuery;
 
     if (updateError) {
       throw new Error(`Failed to update capture: ${updateError.message}`);
@@ -181,11 +200,11 @@ export async function processCapture(captureId) {
  * Process a capture in the background (fire and forget)
  * @param {string} captureId - The capture ID to process
  */
-export function processInBackground(captureId) {
+export function processInBackground(captureId, userId = null) {
   // Use setImmediate to not block the response
   setImmediate(async () => {
     try {
-      await processCapture(captureId);
+      await processCapture(captureId, userId);
     } catch (error) {
       console.error('[Processor] Background processing error:', error);
     }
@@ -197,17 +216,22 @@ export function processInBackground(captureId) {
  * Useful for batch processing or recovery
  * @returns {Promise<{processed: number, failed: number}>}
  */
-export async function processPendingCaptures() {
+export async function processPendingCaptures(userId = null) {
   if (!isSupabaseConfigured()) {
     return { processed: 0, failed: 0 };
   }
 
-  const { data: pendingCaptures, error } = await supabase
+  let pendingQuery = supabase
     .from('captures')
     .select('id')
     .eq('status', 'pending')
-    .order('created_at', { ascending: true })
-    .limit(10);
+    .order('created_at', { ascending: true });
+
+  if (userId) {
+    pendingQuery = pendingQuery.eq('user_id', userId);
+  }
+
+  const { data: pendingCaptures, error } = await pendingQuery.limit(10);
 
   if (error || !pendingCaptures) {
     console.error('[Processor] Failed to fetch pending captures:', error?.message);
@@ -218,7 +242,7 @@ export async function processPendingCaptures() {
   let failed = 0;
 
   for (const capture of pendingCaptures) {
-    const result = await processCapture(capture.id);
+    const result = await processCapture(capture.id, userId);
     if (result.success) {
       processed++;
     } else {
@@ -236,7 +260,7 @@ export async function processPendingCaptures() {
  * @param {number} limit - Max captures to process (default 50)
  * @returns {Promise<{processed: number, failed: number, remaining: number}>}
  */
-export async function backfillEmbeddings(limit = 50) {
+export async function backfillEmbeddings(limit = 50, userId = null) {
   if (!isSupabaseConfigured()) {
     return { processed: 0, failed: 0, remaining: 0, error: 'Supabase not configured' };
   }
@@ -246,13 +270,18 @@ export async function backfillEmbeddings(limit = 50) {
   }
 
   // Find captures without embeddings that have been processed
-  const { data: captures, error: fetchError } = await supabase
+  let capturesQuery = supabase
     .from('captures')
-    .select('id, title, summary, category, tags, content')
+    .select('id, user_id, title, summary, category, tags, content')
     .is('embedding', null)
     .eq('status', 'completed')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+    .order('created_at', { ascending: false });
+
+  if (userId) {
+    capturesQuery = capturesQuery.eq('user_id', userId);
+  }
+
+  const { data: captures, error: fetchError } = await capturesQuery.limit(limit);
 
   if (fetchError) {
     console.error('[Backfill] Failed to fetch captures:', fetchError.message);
@@ -276,10 +305,16 @@ export async function backfillEmbeddings(limit = 50) {
       const embedding = await generateCaptureEmbedding(capture);
       const vectorString = formatForPgVector(embedding);
 
-      const { error: updateError } = await supabase
+      let embeddingUpdateQuery = supabase
         .from('captures')
         .update({ embedding: vectorString })
         .eq('id', capture.id);
+
+      if (userId) {
+        embeddingUpdateQuery = embeddingUpdateQuery.eq('user_id', userId);
+      }
+
+      const { error: updateError } = await embeddingUpdateQuery;
 
       if (updateError) {
         throw new Error(updateError.message);
@@ -294,11 +329,17 @@ export async function backfillEmbeddings(limit = 50) {
   }
 
   // Check how many remain
-  const { count: remaining } = await supabase
+  let remainingQuery = supabase
     .from('captures')
     .select('id', { count: 'exact', head: true })
     .is('embedding', null)
     .eq('status', 'completed');
+
+  if (userId) {
+    remainingQuery = remainingQuery.eq('user_id', userId);
+  }
+
+  const { count: remaining } = await remainingQuery;
 
   console.log(`[Backfill] Complete: ${processed} processed, ${failed} failed, ${remaining || 0} remaining`);
   return { processed, failed, remaining: remaining || 0 };
@@ -310,7 +351,7 @@ export async function backfillEmbeddings(limit = 50) {
  * @param {number} limit - Max captures to process (default 50)
  * @returns {Promise<{processed: number, failed: number, remaining: number}>}
  */
-export async function backfillDisplayTitles(limit = 50) {
+export async function backfillDisplayTitles(limit = 50, userId = null) {
   if (!isSupabaseConfigured()) {
     return { processed: 0, failed: 0, remaining: 0, error: 'Supabase not configured' };
   }
@@ -320,13 +361,18 @@ export async function backfillDisplayTitles(limit = 50) {
   }
 
   // Find captures without display_title that have been processed
-  const { data: captures, error: fetchError } = await supabase
+  let capturesQuery = supabase
     .from('captures')
     .select('id, title, content')
     .is('display_title', null)
     .eq('status', 'completed')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+    .order('created_at', { ascending: false });
+
+  if (userId) {
+    capturesQuery = capturesQuery.eq('user_id', userId);
+  }
+
+  const { data: captures, error: fetchError } = await capturesQuery.limit(limit);
 
   if (fetchError) {
     console.error('[BackfillTitles] Failed to fetch captures:', fetchError.message);
@@ -350,13 +396,20 @@ export async function backfillDisplayTitles(limit = 50) {
       const displayTitle = await generateDisplayTitle(
         capture.title || '',
         capture.content || '',
-        capture.id
+        capture.id,
+        userId
       );
 
-      const { error: updateError } = await supabase
+      let titleUpdateQuery = supabase
         .from('captures')
         .update({ display_title: displayTitle })
         .eq('id', capture.id);
+
+      if (userId) {
+        titleUpdateQuery = titleUpdateQuery.eq('user_id', userId);
+      }
+
+      const { error: updateError } = await titleUpdateQuery;
 
       if (updateError) {
         throw new Error(updateError.message);
@@ -371,11 +424,17 @@ export async function backfillDisplayTitles(limit = 50) {
   }
 
   // Check how many remain
-  const { count: remaining } = await supabase
+  let remainingQuery = supabase
     .from('captures')
     .select('id', { count: 'exact', head: true })
     .is('display_title', null)
     .eq('status', 'completed');
+
+  if (userId) {
+    remainingQuery = remainingQuery.eq('user_id', userId);
+  }
+
+  const { count: remaining } = await remainingQuery;
 
   console.log(`[BackfillTitles] Complete: ${processed} processed, ${failed} failed, ${remaining || 0} remaining`);
   return { processed, failed, remaining: remaining || 0 };

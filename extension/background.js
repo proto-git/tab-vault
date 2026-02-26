@@ -4,6 +4,23 @@
 const DEFAULT_API_URL = 'https://backend-production-49f0.up.railway.app/api';
 let API_URL = DEFAULT_API_URL;
 
+async function apiFetch(path, options = {}) {
+  const config = await chrome.storage.sync.get(['supabaseAccessToken']);
+  const token = config.supabaseAccessToken;
+  const headers = {
+    ...(options.headers || {}),
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers,
+  });
+}
+
 // Load custom API URL from storage on startup
 chrome.storage.sync.get(['apiUrl'], (result) => {
   if (result.apiUrl) {
@@ -97,7 +114,7 @@ async function captureCurrentTab() {
     }
 
     // Send to backend
-    const response = await fetch(`${API_URL}/capture`, {
+    const response = await apiFetch('/capture', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -131,7 +148,7 @@ async function captureCurrentTab() {
 async function searchCaptures(query) {
   try {
     // Try semantic search first (finds conceptually similar content)
-    const semanticResponse = await fetch(`${API_URL}/semantic-search?q=${encodeURIComponent(query)}`);
+    const semanticResponse = await apiFetch(`/semantic-search?q=${encodeURIComponent(query)}`);
 
     if (semanticResponse.ok) {
       const semanticData = await semanticResponse.json();
@@ -143,7 +160,7 @@ async function searchCaptures(query) {
 
     // Fall back to keyword search
     console.log('[Tab Vault] Falling back to keyword search');
-    const response = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`);
+    const response = await apiFetch(`/search?q=${encodeURIComponent(query)}`);
     if (!response.ok) {
       throw new Error(`Server error: ${response.status}`);
     }
@@ -157,7 +174,7 @@ async function searchCaptures(query) {
 // Get recent captures
 async function getRecentCaptures() {
   try {
-    const response = await fetch(`${API_URL}/recent`);
+    const response = await apiFetch('/recent');
     if (!response.ok) {
       throw new Error(`Server error: ${response.status}`);
     }
@@ -171,7 +188,7 @@ async function getRecentCaptures() {
 // Get settings
 async function getSettings() {
   try {
-    const response = await fetch(`${API_URL}/settings`);
+    const response = await apiFetch('/settings');
     if (!response.ok) {
       throw new Error(`Server error: ${response.status}`);
     }
@@ -185,7 +202,7 @@ async function getSettings() {
 // Update settings
 async function updateSettings(settings) {
   try {
-    const response = await fetch(`${API_URL}/settings`, {
+    const response = await apiFetch('/settings', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
@@ -205,7 +222,7 @@ async function updateSettings(settings) {
 // Get usage stats
 async function getUsage() {
   try {
-    const response = await fetch(`${API_URL}/usage`);
+    const response = await apiFetch('/usage');
     if (!response.ok) {
       throw new Error(`Server error: ${response.status}`);
     }
@@ -219,7 +236,7 @@ async function getUsage() {
 // Get categories
 async function getCategories() {
   try {
-    const response = await fetch(`${API_URL}/categories`);
+    const response = await apiFetch('/categories');
     if (!response.ok) {
       throw new Error(`Server error: ${response.status}`);
     }
@@ -233,7 +250,7 @@ async function getCategories() {
 // Add category
 async function addCategory(category) {
   try {
-    const response = await fetch(`${API_URL}/categories`, {
+    const response = await apiFetch('/categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(category)
@@ -251,7 +268,7 @@ async function addCategory(category) {
 // Delete category
 async function deleteCategory(id) {
   try {
-    const response = await fetch(`${API_URL}/categories/${id}`, {
+    const response = await apiFetch(`/categories/${id}`, {
       method: 'DELETE'
     });
     if (!response.ok) {
@@ -267,7 +284,7 @@ async function deleteCategory(id) {
 // Get tags
 async function getTags() {
   try {
-    const response = await fetch(`${API_URL}/tags`);
+    const response = await apiFetch('/tags');
     if (!response.ok) {
       throw new Error(`Server error: ${response.status}`);
     }
@@ -281,7 +298,7 @@ async function getTags() {
 // Delete tag
 async function deleteTag(name) {
   try {
-    const response = await fetch(`${API_URL}/tags/${encodeURIComponent(name)}`, {
+    const response = await apiFetch(`/tags/${encodeURIComponent(name)}`, {
       method: 'DELETE'
     });
     if (!response.ok) {
@@ -297,7 +314,7 @@ async function deleteTag(name) {
 // Merge tags
 async function mergeTags(source, target) {
   try {
-    const response = await fetch(`${API_URL}/tags/merge`, {
+    const response = await apiFetch('/tags/merge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source, target })

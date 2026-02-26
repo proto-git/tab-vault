@@ -7,17 +7,23 @@ import { supabase, isConfigured } from './supabase.js';
  * Get all tags with their usage counts
  * @returns {Promise<{success: boolean, tags?: Array, error?: string}>}
  */
-export async function getTagsWithCounts() {
+export async function getTagsWithCounts(userId = null) {
   if (!isConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
 
   try {
     // Get all captures with tags
-    const { data, error } = await supabase
+    let query = supabase
       .from('captures')
       .select('tags')
       .not('tags', 'is', null);
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw error;
@@ -50,7 +56,7 @@ export async function getTagsWithCounts() {
  * @param {string} tagName - Tag to delete
  * @returns {Promise<{success: boolean, affected?: number, error?: string}>}
  */
-export async function deleteTag(tagName) {
+export async function deleteTag(tagName, userId = null) {
   if (!isConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
@@ -61,10 +67,16 @@ export async function deleteTag(tagName) {
 
   try {
     // Get all captures that have this tag
-    const { data: captures, error: fetchError } = await supabase
+    let capturesQuery = supabase
       .from('captures')
       .select('id, tags')
       .contains('tags', [tagName]);
+
+    if (userId) {
+      capturesQuery = capturesQuery.eq('user_id', userId);
+    }
+
+    const { data: captures, error: fetchError } = await capturesQuery;
 
     if (fetchError) {
       throw fetchError;
@@ -79,10 +91,16 @@ export async function deleteTag(tagName) {
     for (const capture of captures) {
       const newTags = capture.tags.filter(t => t !== tagName);
 
-      const { error: updateError } = await supabase
+      let updateQuery = supabase
         .from('captures')
         .update({ tags: newTags })
         .eq('id', capture.id);
+
+      if (userId) {
+        updateQuery = updateQuery.eq('user_id', userId);
+      }
+
+      const { error: updateError } = await updateQuery;
 
       if (!updateError) {
         affected++;
@@ -103,7 +121,7 @@ export async function deleteTag(tagName) {
  * @param {string} targetTag - Tag to merge into
  * @returns {Promise<{success: boolean, affected?: number, error?: string}>}
  */
-export async function mergeTags(sourceTag, targetTag) {
+export async function mergeTags(sourceTag, targetTag, userId = null) {
   if (!isConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
@@ -118,10 +136,16 @@ export async function mergeTags(sourceTag, targetTag) {
 
   try {
     // Get all captures that have the source tag
-    const { data: captures, error: fetchError } = await supabase
+    let capturesQuery = supabase
       .from('captures')
       .select('id, tags')
       .contains('tags', [sourceTag]);
+
+    if (userId) {
+      capturesQuery = capturesQuery.eq('user_id', userId);
+    }
+
+    const { data: captures, error: fetchError } = await capturesQuery;
 
     if (fetchError) {
       throw fetchError;
@@ -141,10 +165,16 @@ export async function mergeTags(sourceTag, targetTag) {
         newTags.push(targetTag);
       }
 
-      const { error: updateError } = await supabase
+      let updateQuery = supabase
         .from('captures')
         .update({ tags: newTags })
         .eq('id', capture.id);
+
+      if (userId) {
+        updateQuery = updateQuery.eq('user_id', userId);
+      }
+
+      const { error: updateError } = await updateQuery;
 
       if (!updateError) {
         affected++;
@@ -165,7 +195,7 @@ export async function mergeTags(sourceTag, targetTag) {
  * @param {string} newName - New tag name
  * @returns {Promise<{success: boolean, affected?: number, error?: string}>}
  */
-export async function renameTag(oldName, newName) {
+export async function renameTag(oldName, newName, userId = null) {
   if (!isConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
@@ -182,10 +212,16 @@ export async function renameTag(oldName, newName) {
 
   try {
     // Get all captures that have the old tag
-    const { data: captures, error: fetchError } = await supabase
+    let capturesQuery = supabase
       .from('captures')
       .select('id, tags')
       .contains('tags', [oldName]);
+
+    if (userId) {
+      capturesQuery = capturesQuery.eq('user_id', userId);
+    }
+
+    const { data: captures, error: fetchError } = await capturesQuery;
 
     if (fetchError) {
       throw fetchError;
@@ -203,10 +239,16 @@ export async function renameTag(oldName, newName) {
       // Remove duplicates
       const uniqueTags = [...new Set(newTags)];
 
-      const { error: updateError } = await supabase
+      let updateQuery = supabase
         .from('captures')
         .update({ tags: uniqueTags })
         .eq('id', capture.id);
+
+      if (userId) {
+        updateQuery = updateQuery.eq('user_id', userId);
+      }
+
+      const { error: updateError } = await updateQuery;
 
       if (!updateError) {
         affected++;
