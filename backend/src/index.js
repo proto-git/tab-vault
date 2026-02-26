@@ -7,14 +7,30 @@ import captureRouter from './routes/capture.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const allowedOrigins = new Set([
+  process.env.FRONTEND_URL || 'http://localhost:3002',
+  'http://localhost:3000'
+]);
 
 // Middleware
 app.use(cors({
-  origin: [
-    'chrome-extension://*',
-    process.env.FRONTEND_URL || 'http://localhost:3002',
-    'http://localhost:3000'
-  ],
+  origin(origin, callback) {
+    // Allow server-to-server and same-origin requests with no Origin header.
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Allow installed extension origins.
+    if (origin.startsWith('chrome-extension://')) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
   credentials: true
 }));
 app.use(express.json());

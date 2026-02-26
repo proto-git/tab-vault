@@ -5,6 +5,7 @@
   "description": "Capture tabs to your personal knowledge base with AI summarization and RAG search",
   "permissions": [
     "activeTab",
+    "scripting",
     "storage"
   ],
   "host_permissions": [
