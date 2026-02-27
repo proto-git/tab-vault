@@ -25,6 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const usageStats = document.getElementById('usageStats');
   const apiUrlInput = document.getElementById('apiUrlInput');
   const saveApiUrl = document.getElementById('saveApiUrl');
+  const authStateText = document.getElementById('authStateText');
+  const authEmailInput = document.getElementById('authEmailInput');
+  const authPasswordInput = document.getElementById('authPasswordInput');
+  const authSignInBtn = document.getElementById('authSignInBtn');
+  const authSignOutBtn = document.getElementById('authSignOutBtn');
 
   // Categories tab elements
   const categoriesList = document.getElementById('categoriesList');
@@ -138,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
     loadUsageStats();
     loadApiUrl();
+    loadAuthState();
   }
 
   function showMainView() {
@@ -290,6 +296,90 @@ document.addEventListener('DOMContentLoaded', () => {
     if (newUrl) {
       chrome.storage.sync.set({ apiUrl: newUrl });
       showStatus(settingsStatus, true, 'API URL saved!');
+    }
+  });
+
+  async function loadAuthState() {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'authGetState' });
+      renderAuthState(response);
+    } catch (err) {
+      renderAuthState({ success: false, authenticated: false });
+    }
+  }
+
+  function formatSessionExpiry(expiresAt) {
+    if (!expiresAt) return '';
+    const date = new Date(expiresAt * 1000);
+    return ` (expires ${date.toLocaleString()})`;
+  }
+
+  function renderAuthState(state) {
+    if (!state?.authenticated) {
+      authStateText.textContent = 'Signed out';
+      authStateText.className = 'setting-description';
+      authSignInBtn.disabled = false;
+      authSignOutBtn.disabled = true;
+      return;
+    }
+
+    const identity = state.user?.email || 'Authenticated session';
+    const legacyNote = state.legacy ? ' (manual token)' : formatSessionExpiry(state.expiresAt);
+    authStateText.textContent = `Signed in as ${identity}${legacyNote}`;
+    authStateText.className = 'setting-description';
+    authSignOutBtn.disabled = false;
+    authSignInBtn.disabled = false;
+  }
+
+  authSignInBtn.addEventListener('click', async () => {
+    const email = authEmailInput.value.trim();
+    const password = authPasswordInput.value;
+
+    if (!email || !password) {
+      showStatus(settingsStatus, false, 'Email and password are required');
+      return;
+    }
+
+    authSignInBtn.disabled = true;
+    authSignInBtn.textContent = 'Signing in...';
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'authSignIn',
+        email,
+        password,
+      });
+
+      if (!response.success) {
+        showStatus(settingsStatus, false, response.error || 'Sign-in failed');
+        return;
+      }
+
+      authPasswordInput.value = '';
+      showStatus(settingsStatus, true, 'Signed in successfully');
+      await loadAuthState();
+      loadRecentCaptures();
+      loadUsageStats();
+    } catch (err) {
+      showStatus(settingsStatus, false, 'Sign-in failed');
+    } finally {
+      authSignInBtn.disabled = false;
+      authSignInBtn.textContent = 'Sign In';
+    }
+  });
+
+  authSignOutBtn.addEventListener('click', async () => {
+    authSignOutBtn.disabled = true;
+    try {
+      await chrome.runtime.sendMessage({ action: 'authSignOut' });
+      showStatus(settingsStatus, true, 'Signed out');
+      await loadAuthState();
+      loadRecentCaptures();
+      loadUsageStats();
+    } catch (err) {
+      showStatus(settingsStatus, false, 'Failed to sign out');
+    } finally {
+      authSignOutBtn.disabled = false;
     }
   });
 

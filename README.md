@@ -116,6 +116,7 @@ Backend `.env`:
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 PORT=8080
+AUTH_ENFORCE=false
 
 # AI Processing
 OPENROUTER_API_KEY=your-openrouter-key
@@ -125,6 +126,9 @@ OPENAI_API_KEY=your-openai-key  # For embeddings
 NOTION_API_KEY=secret_xxx
 NOTION_DATABASE_ID=your-database-id
 ```
+
+`AUTH_ENFORCE=false` keeps existing clients working while you roll out auth in each client.
+Set `AUTH_ENFORCE=true` to require `Authorization: Bearer <supabase_access_token>` on all `/api/*` routes.
 
 ## API Endpoints
 
@@ -148,6 +152,18 @@ NOTION_DATABASE_ID=your-database-id
 | POST | `/api/notion/sync/:id` | Sync single capture |
 | POST | `/api/notion/sync-all` | Bulk sync captures |
 | POST | `/api/cleanup-images` | Delete stale images from storage |
+
+Auth behavior:
+- `AUTH_ENFORCE=false`: token optional (staged rollout mode)
+- `AUTH_ENFORCE=true`: valid Supabase bearer token required for all `/api/*`
+
+Client token setup for enforced mode:
+- Extension: Settings -> `Account Sign In` -> email/password.
+- Web dashboard: use the `Account` card in the left sidebar to sign in.
+
+Client auth notes:
+- Both clients now perform password sign-in against Supabase Auth and auto-refresh expired access tokens.
+- Backend exposes `GET /auth/config` (public) so clients can bootstrap Supabase URL + anon key.
 
 ## Keyboard Shortcuts
 
@@ -210,7 +226,41 @@ npm run dev
 
 - **Backend**: Push to master → Railway auto-deploys
 - **Frontend**: Push to master → Vercel auto-deploys
-- **Database**: Run migrations manually in Supabase SQL Editor
+- **Database**: Use Supabase CLI migrations (or SQL Editor fallback)
+
+## Supabase CLI Workflow
+
+This repo is wired so Supabase CLI reads migrations from:
+
+- `supabase/migrations` → symlink to `database/migrations`
+
+One-time setup on your machine:
+
+```bash
+# 1) Authenticate CLI
+supabase login
+
+# 2) Link this repo to the hosted project
+supabase link --project-ref qxflrkojvsjovxiyceua
+# You will be prompted for your remote DB password
+```
+
+Daily migration workflow:
+
+```bash
+# Preview what would be applied
+supabase db push --dry-run --linked
+
+# Apply migrations
+supabase db push --linked
+```
+
+Optional local validation (requires Docker):
+
+```bash
+supabase start
+supabase db push --dry-run --local
+```
 
 ## License
 

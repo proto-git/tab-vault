@@ -85,7 +85,8 @@ CREATE OR REPLACE FUNCTION search_captures(
   query_embedding vector(1536),
   match_threshold FLOAT DEFAULT 0.7,
   match_count INT DEFAULT 10,
-  filter_user_id UUID DEFAULT NULL
+  filter_user_id UUID DEFAULT NULL,
+  filter_source TEXT DEFAULT NULL
 )
 RETURNS TABLE (
   id UUID,
@@ -97,6 +98,7 @@ RETURNS TABLE (
   tags TEXT[],
   quality_score INTEGER,
   created_at TIMESTAMP WITH TIME ZONE,
+  source_platform TEXT,
   similarity FLOAT
 )
 LANGUAGE plpgsql
@@ -113,11 +115,13 @@ BEGIN
     c.tags,
     c.quality_score,
     c.created_at,
+    c.source_platform,
     1 - (c.embedding <=> query_embedding) AS similarity
   FROM captures c
   WHERE c.embedding IS NOT NULL
     AND 1 - (c.embedding <=> query_embedding) > match_threshold
     AND (filter_user_id IS NULL OR c.user_id = filter_user_id)
+    AND (filter_source IS NULL OR c.source_platform = filter_source)
   ORDER BY c.embedding <=> query_embedding
   LIMIT match_count;
 END;

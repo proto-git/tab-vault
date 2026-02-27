@@ -40,9 +40,10 @@ export function getModel() {
  * Generate embedding for text
  * @param {string} text - Text to embed
  * @param {string|null} captureId - Capture ID for usage tracking
+ * @param {string|null} userId - User ID for usage tracking
  * @returns {Promise<number[]>} - Embedding vector
  */
-export async function generateEmbedding(text, captureId = null) {
+export async function generateEmbedding(text, captureId = null, userId = null) {
   const client = getClient();
 
   if (!client) {
@@ -66,6 +67,7 @@ export async function generateEmbedding(text, captureId = null) {
   const inputTokens = response.usage?.prompt_tokens || 0;
   recordUsage({
     captureId,
+    userId,
     service: 'openai',
     model: EMBEDDING_MODEL,
     operation: 'embed',
@@ -109,7 +111,7 @@ export async function generateCaptureEmbedding(capture) {
 
   const text = parts.join('\n\n');
 
-  return await generateEmbedding(text, capture.id);
+  return await generateEmbedding(text, capture.id, capture.user_id || null);
 }
 
 /**
@@ -127,5 +129,5 @@ export function formatForPgVector(embedding) {
  * @returns {Promise<number[]>} - Embedding vector
  */
 export async function generateQueryEmbedding(query) {
-  return await generateEmbedding(query, null);
+  return await generateEmbedding(query, null, null);
 }

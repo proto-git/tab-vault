@@ -12,26 +12,37 @@ const DEFAULT_CATEGORIES = [
   { name: 'reference', description: 'APIs, specs, reference materials, wikis', color: '#6b7280' },
 ];
 
-// Cache categories (refreshed on changes)
-let cachedCategories = null;
+// Cache categories, keyed by user ID.
+const cachedCategories = new Map();
+
+function getCacheKey(userId) {
+  return userId || '__anonymous__';
+}
 
 /**
  * Get all categories
  * @returns {Promise<Array>} List of categories
  */
-export async function getCategories() {
+export async function getCategories(userId = null) {
   if (!isConfigured()) {
     return DEFAULT_CATEGORIES;
   }
 
-  if (cachedCategories) {
-    return cachedCategories;
+  const cacheKey = getCacheKey(userId);
+  if (cachedCategories.has(cacheKey)) {
+    return cachedCategories.get(cacheKey);
   }
 
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('categories')
-      .select('*')
+      .select('*');
+
+    if (userId) {
+      query = query.or(`is_default.eq.true,user_id.eq.${userId}`);
+    }
+
+    const { data, error } = await query
       .order('sort_order', { ascending: true });
 
     if (error) {
@@ -39,7 +50,7 @@ export async function getCategories() {
       return DEFAULT_CATEGORIES;
     }
 
-    cachedCategories = data;
+    cachedCategories.set(cacheKey, data);
     return data;
   } catch (err) {
     console.error('[Categories] Error:', err.message);
@@ -51,8 +62,8 @@ export async function getCategories() {
  * Get category names for AI prompt
  * @returns {Promise<string>} Formatted category list for prompt
  */
-export async function getCategoryPrompt() {
-  const categories = await getCategories();
+export async function getCategoryPrompt(userId = null) {
+  const categories = await getCategories(userId);
 
   return categories.map(cat =>
     `- ${cat.name}: ${cat.description}`
@@ -64,7 +75,7 @@ export async function getCategoryPrompt() {
  * @param {Object} category - Category data
  * @returns {Promise<{success: boolean, category?: Object, error?: string}>}
  */
-export async function addCategory({ name, description, color }) {
+export async function addCategory({ name, description, color }, userId = null) {
   if (!isConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
@@ -78,12 +89,17 @@ export async function addCategory({ name, description, color }) {
 
   try {
     // Get max sort_order
-    const { data: maxOrder } = await supabase
+    let maxOrderQuery = supabase
       .from('categories')
       .select('sort_order')
       .order('sort_order', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+
+    if (userId) {
+      maxOrderQuery = maxOrderQuery.eq('user_id', userId);
+    }
+
+    const { data: maxOrder } = await maxOrderQuery.maybeSingle();
 
     const nextOrder = (maxOrder?.sort_order || 0) + 1;
 
@@ -95,6 +111,7 @@ export async function addCategory({ name, description, color }) {
         color: color || '#667eea',
         is_default: false,
         sort_order: nextOrder,
+        user_id: userId,
       })
       .select()
       .single();
@@ -107,7 +124,7 @@ export async function addCategory({ name, description, color }) {
     }
 
     // Clear cache
-    cachedCategories = null;
+    cachedCategories.delete(getCacheKey(userId));
 
     console.log('[Categories] Added:', normalizedName);
     return { success: true, category: data };
@@ -123,7 +140,7 @@ export async function addCategory({ name, description, color }) {
  * @param {Object} updates - Fields to update
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function updateCategory(id, { name, description, color }) {
+export async function updateCategory(id, { name, description, color }, userId = null) {
   if (!isConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
@@ -134,17 +151,23 @@ export async function updateCategory(id, { name, description, color }) {
     if (description !== undefined) updates.description = description;
     if (color) updates.color = color;
 
-    const { error } = await supabase
+    let query = supabase
       .from('categories')
       .update(updates)
       .eq('id', id);
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { error } = await query;
 
     if (error) {
       throw error;
     }
 
     // Clear cache
-    cachedCategories = null;
+    cachedCategories.delete(getCacheKey(userId));
 
     return { success: true };
   } catch (err) {
@@ -158,41 +181,57 @@ export async function updateCategory(id, { name, description, color }) {
  * @param {string} id - Category ID
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function deleteCategory(id) {
+export async function deleteCategory(id, userId = null) {
   if (!isConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
 
   try {
     // Check if it's a default category
-    const { data: cat } = await supabase
+    let categoryQuery = supabase
       .from('categories')
       .select('is_default, name')
-      .eq('id', id)
-      .single();
+      .eq('id', id);
+
+    if (userId) {
+      categoryQuery = categoryQuery.eq('user_id', userId);
+    }
+
+    const { data: cat } = await categoryQuery.single();
 
     if (cat?.is_default) {
       return { success: false, error: 'Cannot delete default categories' };
     }
 
     // Update captures using this category to 'reference' (fallback)
-    await supabase
+    let capturesQuery = supabase
       .from('captures')
       .update({ category: 'reference' })
       .eq('category', cat.name);
 
+    if (userId) {
+      capturesQuery = capturesQuery.eq('user_id', userId);
+    }
+    await capturesQuery;
+
     // Delete the category
-    const { error } = await supabase
+    let deleteQuery = supabase
       .from('categories')
       .delete()
       .eq('id', id);
+
+    if (userId) {
+      deleteQuery = deleteQuery.eq('user_id', userId);
+    }
+
+    const { error } = await deleteQuery;
 
     if (error) {
       throw error;
     }
 
     // Clear cache
-    cachedCategories = null;
+    cachedCategories.delete(getCacheKey(userId));
 
     console.log('[Categories] Deleted:', cat.name);
     return { success: true };
@@ -206,5 +245,5 @@ export async function deleteCategory(id) {
  * Clear the categories cache
  */
 export function clearCategoriesCache() {
-  cachedCategories = null;
+  cachedCategories.clear();
 }

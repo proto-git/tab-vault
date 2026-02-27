@@ -9,13 +9,23 @@ import { getCategories, addCategory, updateCategory, deleteCategory } from '../s
 import { getTagsWithCounts, deleteTag, mergeTags, renameTag } from '../services/tags.js';
 import { isConfigured as isNotionConfigured, testConnection as testNotionConnection, syncCapture, syncMultiple } from '../services/notion.js';
 import { deleteImages } from '../services/imageStorage.js';
+import { isAuthEnforced } from '../middleware/auth.js';
 
 const router = express.Router();
+
+function getUserId(req) {
+  return req.user?.id || null;
+}
+
+function scopeQueryToUser(queryBuilder, userId) {
+  return userId ? queryBuilder.eq('user_id', userId) : queryBuilder;
+}
 
 // POST /api/capture - Capture a new URL
 router.post('/capture', async (req, res, next) => {
   try {
     const { url, title, selectedText, favIconUrl } = req.body;
+    const userId = getUserId(req);
 
     if (!url) {
       return res.status(400).json({
@@ -43,11 +53,15 @@ router.post('/capture', async (req, res, next) => {
 
     // Check for duplicate URL (captured in last 24 hours)
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data: existing } = await supabase
-      .from('captures')
-      .select('id')
-      .eq('url', url)
-      .gte('created_at', oneDayAgo)
+    const existingQuery = scopeQueryToUser(
+      supabase
+        .from('captures')
+        .select('id')
+        .eq('url', url)
+        .gte('created_at', oneDayAgo),
+      userId
+    );
+    const { data: existing } = await existingQuery
       .limit(1);
 
     if (existing && existing.length > 0) {
@@ -66,6 +80,7 @@ router.post('/capture', async (req, res, next) => {
         title: title || url,
         selected_text: selectedText || null,
         favicon_url: favIconUrl || null,
+        user_id: userId,
         status: 'pending', // Will be processed by AI in Phase 2
         created_at: new Date().toISOString()
       })
@@ -79,7 +94,7 @@ router.post('/capture', async (req, res, next) => {
     console.log('[CAPTURED]', url);
 
     // Queue for AI processing (runs in background)
-    processInBackground(data.id);
+    processInBackground(data.id, userId);
 
     res.json({
       success: true,
@@ -101,6 +116,7 @@ router.post('/capture', async (req, res, next) => {
 router.get('/search', async (req, res, next) => {
   try {
     const { q: query, source } = req.query;
+    const userId = getUserId(req);
 
     if (!query) {
       return res.status(400).json({
@@ -118,10 +134,13 @@ router.get('/search', async (req, res, next) => {
     }
 
     // Basic text search (Phase 3 will add vector/semantic search)
-    let queryBuilder = supabase
+    let queryBuilder = scopeQueryToUser(
+      supabase
       .from('captures')
       .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name, image_url')
-      .or(`title.ilike.%${query}%,summary.ilike.%${query}%,content.ilike.%${query}%`);
+      .or(`title.ilike.%${query}%,summary.ilike.%${query}%,content.ilike.%${query}%`),
+      userId
+    );
 
     // Apply source filter if provided
     if (source) {
@@ -150,6 +169,7 @@ router.get('/search', async (req, res, next) => {
 router.get('/semantic-search', async (req, res, next) => {
   try {
     const { q: query, source } = req.query;
+    const userId = getUserId(req);
     const threshold = parseFloat(req.query.threshold) || 0.4;
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
 
@@ -184,6 +204,7 @@ router.get('/semantic-search', async (req, res, next) => {
       query_embedding: vectorString,
       match_threshold: threshold,
       match_count: limit,
+      filter_user_id: userId || null,
       filter_source: source || null
     });
 
@@ -207,6 +228,7 @@ router.get('/recent', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
     const { source, author } = req.query;
+    const userId = getUserId(req);
 
     if (!isConfigured()) {
       return res.json({
@@ -216,9 +238,12 @@ router.get('/recent', async (req, res, next) => {
       });
     }
 
-    let queryBuilder = supabase
+    let queryBuilder = scopeQueryToUser(
+      supabase
       .from('captures')
-      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name, image_url');
+      .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name, image_url'),
+      userId
+    );
 
     // Apply source filter if provided
     if (source) {
@@ -251,6 +276,7 @@ router.get('/recent', async (req, res, next) => {
 router.get('/capture/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
+    const userId = getUserId(req);
 
     if (!isConfigured()) {
       return res.status(404).json({
@@ -259,10 +285,14 @@ router.get('/capture/:id', async (req, res, next) => {
       });
     }
 
-    const { data, error } = await supabase
+    const query = scopeQueryToUser(
+      supabase
       .from('captures')
       .select('*')
-      .eq('id', id)
+      .eq('id', id),
+      userId
+    );
+    const { data, error } = await query
       .single();
 
     if (error || !data) {
@@ -286,6 +316,7 @@ router.get('/captures/:id/related', async (req, res, next) => {
   try {
     const { id } = req.params;
     const limit = Math.min(Math.max(parseInt(req.query.limit) || 5, 1), 10);
+    const userId = getUserId(req);
 
     if (!isConfigured()) {
       return res.json({
@@ -298,6 +329,7 @@ router.get('/captures/:id/related', async (req, res, next) => {
     // Use raw SQL query with pgvector to find similar captures
     const { data, error } = await supabase.rpc('get_related_captures', {
       capture_id: id,
+      filter_user_id: userId || null,
       match_count: limit
     });
 
@@ -305,11 +337,15 @@ router.get('/captures/:id/related', async (req, res, next) => {
       // If RPC doesn't exist, fall back to direct query
       if (error.code === '42883') {
         // Function doesn't exist - use direct query approach
-        const { data: fallbackData, error: fallbackError } = await supabase
+        const fallbackQuery = scopeQueryToUser(
+          supabase
           .from('captures')
           .select('id, url, title, display_title, category, tags, created_at')
           .neq('id', id)
-          .not('embedding', 'is', null)
+          .not('embedding', 'is', null),
+          userId
+        );
+        const { data: fallbackData, error: fallbackError } = await fallbackQuery
           .limit(limit);
 
         if (fallbackError) {
@@ -344,6 +380,7 @@ router.patch('/captures/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const { category, tags } = req.body;
+    const userId = getUserId(req);
 
     if (!isConfigured()) {
       return res.json({
@@ -370,10 +407,14 @@ router.patch('/captures/:id', async (req, res, next) => {
       });
     }
 
-    const { data, error } = await supabase
+    const updateQuery = scopeQueryToUser(
+      supabase
       .from('captures')
       .update(updates)
-      .eq('id', id)
+      .eq('id', id),
+      userId
+    );
+    const { data, error } = await updateQuery
       .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name, image_url')
       .single();
 
@@ -404,6 +445,7 @@ router.patch('/captures/:id', async (req, res, next) => {
 router.delete('/capture/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
+    const userId = getUserId(req);
 
     if (!isConfigured()) {
       return res.json({
@@ -412,10 +454,14 @@ router.delete('/capture/:id', async (req, res, next) => {
       });
     }
 
-    const { error } = await supabase
+    const deleteQuery = scopeQueryToUser(
+      supabase
       .from('captures')
       .delete()
-      .eq('id', id);
+      .eq('id', id),
+      userId
+    );
+    const { error } = await deleteQuery;
 
     if (error) {
       throw error;
@@ -444,6 +490,11 @@ router.get('/status', async (req, res) => {
       ai: getAiModel(),
       embeddings: getEmbeddingsModel(),
     },
+    auth: {
+      enforced: isAuthEnforced(),
+      authenticated: !!req.user,
+      userId: req.user?.id || null,
+    },
     version: '3.0.0', // Phase 4 - Notion sync
   });
 });
@@ -452,11 +503,12 @@ router.get('/status', async (req, res) => {
 router.get('/usage', async (req, res, next) => {
   try {
     const daysBack = Math.min(parseInt(req.query.days) || 30, 90);
+    const userId = getUserId(req);
 
     // Get both summary and today's usage in parallel
     const [summary, today] = await Promise.all([
-      getUsageSummary(daysBack),
-      getTodayUsage(),
+      getUsageSummary(daysBack, userId),
+      getTodayUsage(userId),
     ]);
 
     if (!summary.success) {
@@ -481,7 +533,8 @@ router.get('/usage', async (req, res, next) => {
 // POST /api/process-pending - Process pending captures (admin)
 router.post('/process-pending', async (req, res, next) => {
   try {
-    const result = await processPendingCaptures();
+    const userId = getUserId(req);
+    const result = await processPendingCaptures(userId);
     res.json({
       success: true,
       ...result,
@@ -495,7 +548,8 @@ router.post('/process-pending', async (req, res, next) => {
 router.post('/reprocess/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const result = await processCapture(id);
+    const userId = getUserId(req);
+    const result = await processCapture(id, userId);
     res.json(result);
   } catch (error) {
     next(error);
@@ -506,7 +560,8 @@ router.post('/reprocess/:id', async (req, res, next) => {
 router.post('/backfill-embeddings', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-    const result = await backfillEmbeddings(limit);
+    const userId = getUserId(req);
+    const result = await backfillEmbeddings(limit, userId);
     res.json({
       success: !result.error,
       ...result,
@@ -520,7 +575,8 @@ router.post('/backfill-embeddings', async (req, res, next) => {
 router.post('/backfill-titles', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-    const result = await backfillDisplayTitles(limit);
+    const userId = getUserId(req);
+    const result = await backfillDisplayTitles(limit, userId);
     res.json({
       success: !result.error,
       ...result,
@@ -533,7 +589,8 @@ router.post('/backfill-titles', async (req, res, next) => {
 // GET /api/settings - Get current settings with available options
 router.get('/settings', async (req, res, next) => {
   try {
-    const settings = await getSettingsWithOptions();
+    const userId = getUserId(req);
+    const settings = await getSettingsWithOptions(userId);
     res.json({
       success: true,
       ...settings,
@@ -547,8 +604,9 @@ router.get('/settings', async (req, res, next) => {
 router.put('/settings', async (req, res, next) => {
   try {
     const { aiModel } = req.body;
+    const userId = getUserId(req);
 
-    const result = await updateSettings({ aiModel });
+    const result = await updateSettings({ aiModel }, userId);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -558,7 +616,7 @@ router.put('/settings', async (req, res, next) => {
     clearModelCache();
 
     // Return updated settings
-    const settings = await getSettingsWithOptions();
+    const settings = await getSettingsWithOptions(userId);
     res.json({
       success: true,
       message: 'Settings updated',
@@ -574,7 +632,8 @@ router.put('/settings', async (req, res, next) => {
 // GET /api/categories - Get all categories
 router.get('/categories', async (req, res, next) => {
   try {
-    const categories = await getCategories();
+    const userId = getUserId(req);
+    const categories = await getCategories(userId);
     res.json({
       success: true,
       categories,
@@ -588,8 +647,9 @@ router.get('/categories', async (req, res, next) => {
 router.post('/categories', async (req, res, next) => {
   try {
     const { name, description, color } = req.body;
+    const userId = getUserId(req);
 
-    const result = await addCategory({ name, description, color });
+    const result = await addCategory({ name, description, color }, userId);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -606,8 +666,9 @@ router.put('/categories/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, description, color } = req.body;
+    const userId = getUserId(req);
 
-    const result = await updateCategory(id, { name, description, color });
+    const result = await updateCategory(id, { name, description, color }, userId);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -623,8 +684,9 @@ router.put('/categories/:id', async (req, res, next) => {
 router.delete('/categories/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
+    const userId = getUserId(req);
 
-    const result = await deleteCategory(id);
+    const result = await deleteCategory(id, userId);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -641,7 +703,8 @@ router.delete('/categories/:id', async (req, res, next) => {
 // GET /api/tags - Get all tags with counts
 router.get('/tags', async (req, res, next) => {
   try {
-    const result = await getTagsWithCounts();
+    const userId = getUserId(req);
+    const result = await getTagsWithCounts(userId);
 
     if (!result.success) {
       return res.status(500).json(result);
@@ -657,8 +720,9 @@ router.get('/tags', async (req, res, next) => {
 router.delete('/tags/:name', async (req, res, next) => {
   try {
     const { name } = req.params;
+    const userId = getUserId(req);
 
-    const result = await deleteTag(name);
+    const result = await deleteTag(name, userId);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -674,8 +738,9 @@ router.delete('/tags/:name', async (req, res, next) => {
 router.post('/tags/merge', async (req, res, next) => {
   try {
     const { source, target } = req.body;
+    const userId = getUserId(req);
 
-    const result = await mergeTags(source, target);
+    const result = await mergeTags(source, target, userId);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -692,8 +757,9 @@ router.put('/tags/:name', async (req, res, next) => {
   try {
     const { name } = req.params;
     const { newName } = req.body;
+    const userId = getUserId(req);
 
-    const result = await renameTag(name, newName);
+    const result = await renameTag(name, newName, userId);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -736,6 +802,7 @@ router.get('/notion/status', async (req, res, next) => {
 router.post('/notion/sync/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
+    const userId = getUserId(req);
 
     if (!isNotionConfigured()) {
       return res.status(503).json({
@@ -752,10 +819,14 @@ router.post('/notion/sync/:id', async (req, res, next) => {
     }
 
     // Get the capture
-    const { data: capture, error: fetchError } = await supabase
+    const captureQuery = scopeQueryToUser(
+      supabase
       .from('captures')
       .select('*')
-      .eq('id', id)
+      .eq('id', id),
+      userId
+    );
+    const { data: capture, error: fetchError } = await captureQuery
       .single();
 
     if (fetchError || !capture) {
@@ -776,14 +847,18 @@ router.post('/notion/sync/:id', async (req, res, next) => {
     }
 
     // Update capture with Notion sync info
-    await supabase
+    const updateQuery = scopeQueryToUser(
+      supabase
       .from('captures')
       .update({
         notion_synced: true,
         notion_page_id: result.pageId,
         notion_synced_at: new Date().toISOString(),
       })
-      .eq('id', id);
+      .eq('id', id),
+      userId
+    );
+    await updateQuery;
 
     console.log(`[Notion] Synced capture ${id} -> ${result.pageId}`);
 
@@ -802,6 +877,7 @@ router.post('/notion/sync/:id', async (req, res, next) => {
 router.post('/notion/sync-all', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const userId = getUserId(req);
 
     if (!isNotionConfigured()) {
       return res.status(503).json({
@@ -818,11 +894,15 @@ router.post('/notion/sync-all', async (req, res, next) => {
     }
 
     // Get unsynced captures
-    const { data: captures, error: fetchError } = await supabase
+    const capturesQuery = scopeQueryToUser(
+      supabase
       .from('captures')
       .select('*')
       .eq('status', 'completed')
-      .or('notion_synced.is.null,notion_synced.eq.false')
+      .or('notion_synced.is.null,notion_synced.eq.false'),
+      userId
+    );
+    const { data: captures, error: fetchError } = await capturesQuery
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -843,14 +923,18 @@ router.post('/notion/sync-all', async (req, res, next) => {
 
     // Update synced captures in database
     for (const synced of results.synced) {
-      await supabase
+      const syncUpdateQuery = scopeQueryToUser(
+        supabase
         .from('captures')
         .update({
           notion_synced: true,
           notion_page_id: synced.pageId,
           notion_synced_at: new Date().toISOString(),
         })
-        .eq('id', synced.id);
+        .eq('id', synced.id),
+        userId
+      );
+      await syncUpdateQuery;
     }
 
     console.log(`[Notion] Bulk sync: ${results.success} synced, ${results.failed} failed`);
@@ -876,6 +960,7 @@ router.post('/cleanup-images', async (req, res, next) => {
   try {
     const daysOld = Math.max(parseInt(req.query.days) || 30, 7); // Minimum 7 days
     const dryRun = req.query.dry_run === 'true';
+    const userId = getUserId(req);
 
     if (!isConfigured()) {
       return res.status(503).json({
@@ -891,11 +976,15 @@ router.post('/cleanup-images', async (req, res, next) => {
     // - Not synced to Notion
     // - Older than cutoff date
     // - Have an image_url
-    const { data: staleCaptures, error: fetchError } = await supabase
+    const cleanupQuery = scopeQueryToUser(
+      supabase
       .from('captures')
       .select('id, image_url, created_at')
       .not('image_url', 'is', null)
-      .or('notion_synced.is.null,notion_synced.eq.false')
+      .or('notion_synced.is.null,notion_synced.eq.false'),
+      userId
+    );
+    const { data: staleCaptures, error: fetchError } = await cleanupQuery
       .lt('created_at', cutoffDate);
 
     if (fetchError) {
@@ -935,10 +1024,14 @@ router.post('/cleanup-images', async (req, res, next) => {
     // Clear image_url from captures
     if (deleteResult.success > 0) {
       const idsToUpdate = staleCaptures.map(c => c.id);
-      await supabase
+      const clearImagesQuery = scopeQueryToUser(
+        supabase
         .from('captures')
         .update({ image_url: null })
-        .in('id', idsToUpdate);
+        .in('id', idsToUpdate),
+        userId
+      );
+      await clearImagesQuery;
     }
 
     console.log(`[Cleanup] Deleted ${deleteResult.success} stale images (${daysOld}+ days old, not synced to Notion)`);

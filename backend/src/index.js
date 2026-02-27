@@ -4,17 +4,34 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import captureRouter from './routes/capture.js';
+import { authGate, isAuthEnforced } from './middleware/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const allowedOrigins = new Set([
+  process.env.FRONTEND_URL || 'http://localhost:3002',
+  'http://localhost:3000'
+]);
 
 // Middleware
 app.use(cors({
-  origin: [
-    'chrome-extension://*',
-    process.env.FRONTEND_URL || 'http://localhost:3002',
-    'http://localhost:3000'
-  ],
+  origin(origin, callback) {
+    // Allow server-to-server and same-origin requests with no Origin header.
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Allow installed extension origins.
+    if (origin.startsWith('chrome-extension://')) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
   credentials: true
 }));
 app.use(express.json());
@@ -30,8 +47,24 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Public auth config for clients (anon key is safe to expose in browser clients)
+app.get('/auth/config', (req, res) => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    return res.status(503).json({
+      success: false,
+      error: 'Supabase auth is not configured on server',
+    });
+  }
+
+  return res.json({
+    success: true,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+  });
+});
+
 // API routes
-app.use('/api', captureRouter);
+app.use('/api', authGate, captureRouter);
 
 // Error handling
 app.use((err, req, res, next) => {
@@ -51,10 +84,11 @@ app.listen(PORT, () => {
 ║   Server running on port ${PORT}            ║
 ║   http://localhost:${PORT}                  ║
 ║                                           ║
-║   Endpoints:                              ║
-║   POST /api/capture - Capture a URL       ║
-║   GET  /api/search  - Search captures     ║
-║   GET  /api/recent  - Recent captures     ║
+  ║   Endpoints:                              ║
+  ║   POST /api/capture - Capture a URL       ║
+  ║   GET  /api/search  - Search captures     ║
+  ║   GET  /api/recent  - Recent captures     ║
+  ║   Auth enforced: ${isAuthEnforced() ? 'yes' : 'no'}                    ║
 ╚═══════════════════════════════════════════╝
   `);
 });
