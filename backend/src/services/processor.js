@@ -180,16 +180,25 @@ export async function processCapture(captureId, userId = null) {
   } catch (error) {
     console.error('[Processor] Processing failed:', error.message);
 
-    // Update capture with error status
+    // Update capture with error status (preserve user scope when provided).
     if (isSupabaseConfigured()) {
-      await supabase
-        .from('captures')
-        .update({
-          status: 'error',
-          error_message: error.message,
-        })
-        .eq('id', captureId)
-        .catch(() => {});
+      try {
+        let errorStatusQuery = supabase
+          .from('captures')
+          .update({
+            status: 'error',
+            error_message: error.message,
+          })
+          .eq('id', captureId);
+
+        if (userId) {
+          errorStatusQuery = errorStatusQuery.eq('user_id', userId);
+        }
+
+        await errorStatusQuery;
+      } catch {
+        // Best-effort status update; original processing error is returned below.
+      }
     }
 
     return { success: false, error: error.message };
