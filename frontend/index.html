@@ -91,6 +91,10 @@
       box-sizing: border-box;
     }
 
+    .hidden {
+      display: none !important;
+    }
+
     html {
       font-size: 16px;
       -webkit-font-smoothing: antialiased;
@@ -358,6 +362,90 @@
 
     .source-filter-option .source-icon {
       font-size: 1rem;
+    }
+
+    .auth-card {
+      background: var(--bg-elevated);
+      border-radius: 12px;
+      padding: var(--space-md);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .auth-state {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-bottom: var(--space-sm);
+    }
+
+    .auth-state.signed-in {
+      color: var(--accent);
+    }
+
+    .auth-form,
+    .auth-session {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+    }
+
+    .auth-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border-medium);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .auth-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .auth-btn {
+      padding: 10px 12px;
+      border: 1px solid var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .auth-btn:hover {
+      background: var(--accent);
+      color: var(--bg-deep);
+    }
+
+    .auth-btn.auth-btn-secondary {
+      border-color: var(--border-medium);
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+    }
+
+    .auth-btn.auth-btn-secondary:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .auth-user {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      word-break: break-word;
+    }
+
+    .auth-message {
+      margin-top: var(--space-sm);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .auth-message.error {
+      color: #ef4444;
     }
 
     /* Stats card */
@@ -1410,6 +1498,21 @@
         <span id="themeLabel">Light mode</span>
       </button>
 
+      <div class="auth-card">
+        <div class="stats-title">Account</div>
+        <div class="auth-state" id="authStateBadge">Signed out</div>
+        <div class="auth-form" id="authForm">
+          <input type="email" id="authEmail" class="auth-input" placeholder="you@example.com">
+          <input type="password" id="authPassword" class="auth-input" placeholder="Password">
+          <button class="auth-btn" id="authSignInBtn">Sign In</button>
+        </div>
+        <div class="auth-session hidden" id="authSession">
+          <div class="auth-user" id="authUserEmail">Signed in</div>
+          <button class="auth-btn auth-btn-secondary" id="authSignOutBtn">Sign Out</button>
+        </div>
+        <div class="auth-message hidden" id="authMessage"></div>
+      </div>
+
       <nav class="nav-section">
         <span class="nav-label">Browse</span>
         <button class="nav-item active" data-filter="all">
@@ -1605,23 +1708,229 @@
   <script>
     // Configuration
     const API_URL = 'https://backend-production-49f0.up.railway.app/api';
+    const DEFAULT_SUPABASE_URL = 'https://qxflrkojvsjovxiyceua.supabase.co';
+    const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_C6AscAuRnGmWPxdHVaZS-Q_M8SfWqmk';
+    const AUTH_SESSION_KEY = 'tabvault.supabase.session';
+    const AUTH_REFRESH_BUFFER_SECONDS = 90;
+    let cachedSupabaseConfig = null;
 
-    function buildAuthHeaders(headers = {}) {
-      const token = localStorage.getItem('supabaseAccessToken');
-      if (!token) {
-        return headers;
+    function getBackendBaseUrl() {
+      return API_URL.replace(/\/api\/?$/, '');
+    }
+
+    function nowEpochSeconds() {
+      return Math.floor(Date.now() / 1000);
+    }
+
+    function getStoredSession() {
+      const raw = localStorage.getItem(AUTH_SESSION_KEY);
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        localStorage.removeItem(AUTH_SESSION_KEY);
+        return null;
       }
+    }
+
+    function saveSession(session) {
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+      localStorage.setItem('supabaseAccessToken', session.access_token || '');
+    }
+
+    function clearSession() {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      localStorage.removeItem('supabaseAccessToken');
+    }
+
+    function normalizeSession(payload) {
+      const expiresAt = payload.expires_at || (nowEpochSeconds() + (payload.expires_in || 3600));
       return {
-        ...headers,
-        Authorization: `Bearer ${token}`,
+        access_token: payload.access_token,
+        refresh_token: payload.refresh_token,
+        token_type: payload.token_type || 'bearer',
+        expires_at: expiresAt,
+        expires_in: payload.expires_in || Math.max(expiresAt - nowEpochSeconds(), 0),
+        user: payload.user ? { id: payload.user.id, email: payload.user.email } : null,
       };
     }
 
-    async function apiFetch(path, options = {}) {
-      return fetch(`${API_URL}${path}`, {
+    function isSessionExpiring(session) {
+      if (!session?.expires_at) return false;
+      return session.expires_at <= nowEpochSeconds() + AUTH_REFRESH_BUFFER_SECONDS;
+    }
+
+    async function getSupabaseConfig() {
+      if (cachedSupabaseConfig) {
+        return cachedSupabaseConfig;
+      }
+
+      try {
+        const response = await fetch(`${getBackendBaseUrl()}/auth/config`);
+        if (response.ok) {
+          const config = await response.json();
+          if (config?.supabaseUrl && config?.supabaseAnonKey) {
+            cachedSupabaseConfig = {
+              supabaseUrl: config.supabaseUrl,
+              supabaseAnonKey: config.supabaseAnonKey,
+            };
+            return cachedSupabaseConfig;
+          }
+        }
+      } catch (error) {
+        console.warn('Could not fetch auth config from backend:', error.message);
+      }
+
+      const fallbackUrl = localStorage.getItem('tabvault.supabaseUrl');
+      const fallbackKey = localStorage.getItem('tabvault.supabaseAnonKey');
+      if (fallbackUrl && fallbackKey) {
+        cachedSupabaseConfig = {
+          supabaseUrl: fallbackUrl,
+          supabaseAnonKey: fallbackKey,
+        };
+        return cachedSupabaseConfig;
+      }
+
+      cachedSupabaseConfig = {
+        supabaseUrl: DEFAULT_SUPABASE_URL,
+        supabaseAnonKey: DEFAULT_SUPABASE_ANON_KEY,
+      };
+      return cachedSupabaseConfig;
+    }
+
+    function supabaseHeaders(anonKey) {
+      return {
+        'Content-Type': 'application/json',
+        apikey: anonKey,
+      };
+    }
+
+    async function refreshSession(force = false) {
+      const session = getStoredSession();
+      if (!session?.refresh_token) {
+        return { success: false, error: 'No refresh token available' };
+      }
+
+      if (!force && !isSessionExpiring(session)) {
+        return { success: true, session };
+      }
+
+      const config = await getSupabaseConfig();
+      if (!config) {
+        clearSession();
+        return { success: false, error: 'Supabase auth config not available' };
+      }
+
+      try {
+        const response = await fetch(
+          `${config.supabaseUrl}/auth/v1/token?grant_type=refresh_token`,
+          {
+            method: 'POST',
+            headers: supabaseHeaders(config.supabaseAnonKey),
+            body: JSON.stringify({ refresh_token: session.refresh_token }),
+          }
+        );
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.access_token) {
+          clearSession();
+          return {
+            success: false,
+            error: payload.error_description || payload.msg || payload.error || 'Failed to refresh session',
+          };
+        }
+
+        const nextSession = normalizeSession(payload);
+        saveSession(nextSession);
+        return { success: true, session: nextSession };
+      } catch (error) {
+        clearSession();
+        return { success: false, error: error.message };
+      }
+    }
+
+    async function signInWithPassword(email, password) {
+      const config = await getSupabaseConfig();
+      if (!config) {
+        return { success: false, error: 'Supabase auth config not available' };
+      }
+
+      try {
+        const response = await fetch(
+          `${config.supabaseUrl}/auth/v1/token?grant_type=password`,
+          {
+            method: 'POST',
+            headers: supabaseHeaders(config.supabaseAnonKey),
+            body: JSON.stringify({ email, password }),
+          }
+        );
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.access_token) {
+          return {
+            success: false,
+            error: payload.error_description || payload.msg || payload.error || 'Sign-in failed',
+          };
+        }
+
+        const session = normalizeSession(payload);
+        saveSession(session);
+        return { success: true, session };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    }
+
+    async function ensureValidAccessToken() {
+      const session = getStoredSession();
+      if (!session?.access_token) return null;
+
+      if (isSessionExpiring(session)) {
+        const refreshed = await refreshSession(true);
+        if (refreshed.success) {
+          return refreshed.session.access_token;
+        }
+        return null;
+      }
+
+      return session.access_token;
+    }
+
+    async function apiFetch(path, options = {}, retryOnUnauthorized = true) {
+      const headers = {
+        ...(options.headers || {}),
+      };
+
+      const token = await ensureValidAccessToken();
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${API_URL}${path}`, {
         ...options,
-        headers: buildAuthHeaders(options.headers || {}),
+        headers,
       });
+
+      if (response.status === 401 && retryOnUnauthorized) {
+        const refreshed = await refreshSession(true);
+        if (refreshed.success && refreshed.session?.access_token) {
+          const retryHeaders = {
+            ...headers,
+            Authorization: `Bearer ${refreshed.session.access_token}`,
+          };
+          return fetch(`${API_URL}${path}`, {
+            ...options,
+            headers: retryHeaders,
+          });
+        }
+
+        if (getStoredSession()?.refresh_token) {
+          clearSession();
+          renderAuthState();
+        }
+      }
+
+      return response;
     }
 
     // State
@@ -1639,17 +1948,111 @@
     const resultsTitle = document.getElementById('resultsTitle');
     const resultsCount = document.getElementById('resultsCount');
     const modalOverlay = document.getElementById('modalOverlay');
+    const authStateBadge = document.getElementById('authStateBadge');
+    const authForm = document.getElementById('authForm');
+    const authSession = document.getElementById('authSession');
+    const authEmail = document.getElementById('authEmail');
+    const authPassword = document.getElementById('authPassword');
+    const authSignInBtn = document.getElementById('authSignInBtn');
+    const authSignOutBtn = document.getElementById('authSignOutBtn');
+    const authUserEmail = document.getElementById('authUserEmail');
+    const authMessage = document.getElementById('authMessage');
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+      setupEventListeners();
+      await initializeAuthState();
       loadCaptures();
       loadUsage();
       loadCategories();
       loadAllTags();
-      setupEventListeners();
     });
 
+    function setAuthMessage(message, isError = false) {
+      if (!message) {
+        authMessage.textContent = '';
+        authMessage.className = 'auth-message hidden';
+        return;
+      }
+
+      authMessage.textContent = message;
+      authMessage.className = `auth-message ${isError ? 'error' : ''}`;
+    }
+
+    function renderAuthState() {
+      const session = getStoredSession();
+      const authenticated = !!session?.access_token;
+
+      authStateBadge.textContent = authenticated ? 'Signed in' : 'Signed out';
+      authStateBadge.classList.toggle('signed-in', authenticated);
+      authForm.classList.toggle('hidden', authenticated);
+      authSession.classList.toggle('hidden', !authenticated);
+      authUserEmail.textContent = session?.user?.email || 'Authenticated session';
+    }
+
+    function renderAuthRequiredNotice(message = 'Sign in to load your captures.') {
+      capturesGrid.innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+      resultsCount.textContent = '';
+    }
+
+    async function initializeAuthState() {
+      const session = getStoredSession();
+      if (session?.refresh_token) {
+        await refreshSession(false);
+      }
+      renderAuthState();
+    }
+
     function setupEventListeners() {
+      authSignInBtn.addEventListener('click', async () => {
+        const email = authEmail.value.trim();
+        const password = authPassword.value;
+
+        if (!email || !password) {
+          setAuthMessage('Email and password are required', true);
+          return;
+        }
+
+        authSignInBtn.disabled = true;
+        authSignInBtn.textContent = 'Signing in...';
+        setAuthMessage('');
+
+        try {
+          const result = await signInWithPassword(email, password);
+          if (!result.success) {
+            setAuthMessage(result.error || 'Sign-in failed', true);
+            return;
+          }
+
+          authPassword.value = '';
+          renderAuthState();
+          setAuthMessage('Signed in successfully');
+          loadCaptures();
+          loadUsage();
+          loadCategories();
+          loadAllTags();
+        } finally {
+          authSignInBtn.disabled = false;
+          authSignInBtn.textContent = 'Sign In';
+        }
+      });
+
+      authSignOutBtn.addEventListener('click', () => {
+        clearSession();
+        renderAuthState();
+        setAuthMessage('Signed out');
+        loadCaptures();
+        loadUsage();
+        loadCategories();
+        loadAllTags();
+      });
+
+      authPassword.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          authSignInBtn.click();
+        }
+      });
+
       // Search
       let searchTimeout;
       searchInput.addEventListener('input', (e) => {
@@ -1791,7 +2194,14 @@
         btn.disabled = true;
 
         try {
-          await apiFetch(`/reprocess/${currentCapture.id}`, { method: 'POST' });
+          const response = await apiFetch(`/reprocess/${currentCapture.id}`, { method: 'POST' });
+          if (response.status === 401) {
+            alert('Sign in required');
+            return;
+          }
+          if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+          }
           await loadCaptures();
           closeModal();
         } catch (err) {
@@ -1807,7 +2217,14 @@
         if (!confirm('Delete this capture?')) return;
 
         try {
-          await apiFetch(`/capture/${currentCapture.id}`, { method: 'DELETE' });
+          const response = await apiFetch(`/capture/${currentCapture.id}`, { method: 'DELETE' });
+          if (response.status === 401) {
+            alert('Sign in required');
+            return;
+          }
+          if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+          }
           await loadCaptures();
           closeModal();
         } catch (err) {
@@ -1827,6 +2244,14 @@
           const response = await apiFetch(`/notion/sync/${currentCapture.id}`, {
             method: 'POST'
           });
+          if (response.status === 401) {
+            alert('Sign in required');
+            btn.innerHTML = originalText;
+            return;
+          }
+          if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+          }
           const data = await response.json();
 
           if (data.success) {
@@ -1912,6 +2337,15 @@
           path += `&source=${encodeURIComponent(currentSource)}`;
         }
         const response = await apiFetch(path);
+        if (response.status === 401) {
+          captures = [];
+          updateCounts();
+          renderAuthRequiredNotice();
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
         const data = await response.json();
         captures = data.results || [];
         updateCounts();
@@ -1931,6 +2365,12 @@
 
         // Try semantic search first
         const semanticRes = await apiFetch(`/semantic-search?q=${encodeURIComponent(query)}${sourceParam}`);
+        if (semanticRes.status === 401) {
+          captures = [];
+          updateCounts();
+          renderAuthRequiredNotice('Sign in to run search.');
+          return;
+        }
         const semanticData = await semanticRes.json();
 
         if (semanticData.success && semanticData.results?.length > 0) {
@@ -1939,6 +2379,12 @@
         } else {
           // Fall back to keyword search
           const keywordRes = await apiFetch(`/search?q=${encodeURIComponent(query)}${sourceParam}`);
+          if (keywordRes.status === 401) {
+            captures = [];
+            updateCounts();
+            renderAuthRequiredNotice('Sign in to run search.');
+            return;
+          }
           const keywordData = await keywordRes.json();
           captures = keywordData.results || [];
           resultsCount.textContent = `${captures.length} results (keyword)`;
@@ -1953,6 +2399,14 @@
     async function loadUsage() {
       try {
         const response = await apiFetch('/usage');
+        if (response.status === 401) {
+          document.getElementById('statRequests').textContent = '-';
+          document.getElementById('statCost').textContent = '-';
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
         const data = await response.json();
 
         if (data.today) {
@@ -1968,6 +2422,13 @@
     async function loadCategories() {
       try {
         const response = await apiFetch('/categories');
+        if (response.status === 401) {
+          allCategories = [];
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
         const data = await response.json();
         if (data.success) {
           allCategories = data.categories;
@@ -1980,6 +2441,13 @@
     async function loadAllTags() {
       try {
         const response = await apiFetch('/tags');
+        if (response.status === 401) {
+          allTags = [];
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
         const data = await response.json();
         if (data.success) {
           allTags = data.tags.map(t => t.name);
@@ -1996,6 +2464,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updates)
         });
+        if (response.status === 401) {
+          return { success: false, error: 'Authentication required' };
+        }
+        if (!response.ok) {
+          return { success: false, error: `Server error: ${response.status}` };
+        }
         const data = await response.json();
 
         if (data.success) {
@@ -2333,6 +2807,13 @@
 
       try {
         const response = await apiFetch(`/captures/${captureId}/related?limit=5`);
+        if (response.status === 401) {
+          container.innerHTML = '<div class="related-empty">Sign in to see related captures</div>';
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
         const data = await response.json();
 
         if (!data.success || !data.results || data.results.length === 0) {
@@ -2370,6 +2851,9 @@
               // Fetch from API if not in current list
               try {
                 const res = await apiFetch(`/capture/${id}`);
+                if (res.status === 401 || !res.ok) {
+                  return;
+                }
                 const data = await res.json();
                 if (data.success) {
                   capture = data.data;

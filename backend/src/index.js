@@ -47,6 +47,22 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Public auth config for clients (anon key is safe to expose in browser clients)
+app.get('/auth/config', (req, res) => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    return res.status(503).json({
+      success: false,
+      error: 'Supabase auth is not configured on server',
+    });
+  }
+
+  return res.json({
+    success: true,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+  });
+});
+
 // API routes
 app.use('/api', authGate, captureRouter);
 

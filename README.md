@@ -158,8 +158,12 @@ Auth behavior:
 - `AUTH_ENFORCE=true`: valid Supabase bearer token required for all `/api/*`
 
 Client token setup for enforced mode:
-- Extension: Settings -> `Supabase Access Token (Optional)` -> paste user access token.
-- Web dashboard: set `localStorage.supabaseAccessToken = "<token>"` in browser devtools.
+- Extension: Settings -> `Account Sign In` -> email/password.
+- Web dashboard: use the `Account` card in the left sidebar to sign in.
+
+Client auth notes:
+- Both clients now perform password sign-in against Supabase Auth and auto-refresh expired access tokens.
+- Backend exposes `GET /auth/config` (public) so clients can bootstrap Supabase URL + anon key.
 
 ## Keyboard Shortcuts
 

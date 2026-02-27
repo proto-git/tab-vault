@@ -96,10 +96,15 @@
         </div>
 
         <div class="setting-group">
-          <label class="setting-label">Supabase Access Token (Optional)</label>
-          <p class="setting-description">Needed when backend AUTH_ENFORCE is enabled</p>
-          <input type="password" id="authTokenInput" class="setting-input" placeholder="eyJhbGciOi..." />
-          <button id="saveAuthToken" class="save-btn">Save Token</button>
+          <label class="setting-label">Account Sign In</label>
+          <p class="setting-description">Used when backend AUTH_ENFORCE is enabled</p>
+          <div id="authStateText" class="setting-description">Checking session...</div>
+          <input type="email" id="authEmailInput" class="setting-input-full" placeholder="you@example.com" />
+          <input type="password" id="authPasswordInput" class="setting-input-full" placeholder="Password" />
+          <div class="auth-actions">
+            <button id="authSignInBtn" class="save-btn">Sign In</button>
+            <button id="authSignOutBtn" class="item-btn">Sign Out</button>
+          </div>
         </div>
       </section>
 

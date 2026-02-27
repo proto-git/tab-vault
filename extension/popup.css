@@ -332,6 +332,20 @@ body {
   border-color: #667eea;
 }
 
+.setting-input-full {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  outline: none;
+  margin-bottom: 8px;
+}
+
+.setting-input-full:focus {
+  border-color: #667eea;
+}
+
 .save-btn {
   padding: 10px 14px;
   font-size: 13px;
@@ -346,6 +360,16 @@ body {
 
 .save-btn:hover {
   background: #5a6fd6;
+}
+
+.auth-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.auth-actions .save-btn {
+  margin-left: 0;
 }
 
 .back-btn {
