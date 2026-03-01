@@ -26,9 +26,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const apiUrlInput = document.getElementById('apiUrlInput');
   const saveApiUrl = document.getElementById('saveApiUrl');
   const authStateText = document.getElementById('authStateText');
+  const authCredentials = document.getElementById('authCredentials');
   const authEmailInput = document.getElementById('authEmailInput');
   const authPasswordInput = document.getElementById('authPasswordInput');
   const authSignInBtn = document.getElementById('authSignInBtn');
+  const authSwitchAccountBtn = document.getElementById('authSwitchAccountBtn');
   const authSignOutBtn = document.getElementById('authSignOutBtn');
 
   // Categories tab elements
@@ -49,6 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentModel = '';
   let categories = [];
   let tags = [];
+  let currentAuthState = { authenticated: false };
+  let isSwitchingAccount = false;
 
   // Load recent captures on open
   loadRecentCaptures();
@@ -302,9 +306,11 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadAuthState() {
     try {
       const response = await chrome.runtime.sendMessage({ action: 'authGetState' });
-      renderAuthState(response);
+      currentAuthState = response?.success ? response : { authenticated: false };
+      renderAuthState(currentAuthState);
     } catch (err) {
-      renderAuthState({ success: false, authenticated: false });
+      currentAuthState = { authenticated: false };
+      renderAuthState(currentAuthState);
     }
   }
 
@@ -315,9 +321,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderAuthState(state) {
-    if (!state?.authenticated) {
+    const isAuthenticated = !!state?.authenticated;
+
+    if (!isAuthenticated) {
+      isSwitchingAccount = false;
       authStateText.textContent = 'Signed out';
       authStateText.className = 'setting-description';
+      authCredentials.classList.remove('hidden');
+      authSwitchAccountBtn.classList.add('hidden');
+      authSwitchAccountBtn.textContent = 'Switch account';
+      authSignOutBtn.classList.add('hidden');
       authSignInBtn.disabled = false;
       authSignOutBtn.disabled = true;
       return;
@@ -325,10 +338,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const identity = state.user?.email || 'Authenticated session';
     const legacyNote = state.legacy ? ' (manual token)' : formatSessionExpiry(state.expiresAt);
-    authStateText.textContent = `Signed in as ${identity}${legacyNote}`;
+    const switchHint = isSwitchingAccount ? ' • Enter credentials to switch account' : '';
+    authStateText.textContent = `Signed in as ${identity}${legacyNote}${switchHint}`;
     authStateText.className = 'setting-description';
+    authSwitchAccountBtn.classList.remove('hidden');
+    authSignOutBtn.classList.remove('hidden');
     authSignOutBtn.disabled = false;
     authSignInBtn.disabled = false;
+    authCredentials.classList.toggle('hidden', !isSwitchingAccount);
+    authSwitchAccountBtn.textContent = isSwitchingAccount ? 'Cancel' : 'Switch account';
+  }
+
+  function resetAuthInputs(clearEmail = false) {
+    if (clearEmail) {
+      authEmailInput.value = '';
+    }
+    authPasswordInput.value = '';
   }
 
   authSignInBtn.addEventListener('click', async () => {
@@ -355,7 +380,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      authPasswordInput.value = '';
+      isSwitchingAccount = false;
+      resetAuthInputs();
       showStatus(settingsStatus, true, 'Signed in successfully');
       await loadAuthState();
       loadRecentCaptures();
@@ -372,6 +398,8 @@ document.addEventListener('DOMContentLoaded', () => {
     authSignOutBtn.disabled = true;
     try {
       await chrome.runtime.sendMessage({ action: 'authSignOut' });
+      isSwitchingAccount = false;
+      resetAuthInputs(true);
       showStatus(settingsStatus, true, 'Signed out');
       await loadAuthState();
       loadRecentCaptures();
@@ -380,6 +408,27 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus(settingsStatus, false, 'Failed to sign out');
     } finally {
       authSignOutBtn.disabled = false;
+    }
+  });
+
+  authSwitchAccountBtn.addEventListener('click', () => {
+    if (!currentAuthState?.authenticated) {
+      return;
+    }
+
+    isSwitchingAccount = !isSwitchingAccount;
+    if (isSwitchingAccount) {
+      resetAuthInputs();
+      authEmailInput.focus();
+    } else {
+      resetAuthInputs();
+    }
+    renderAuthState(currentAuthState);
+  });
+
+  authPasswordInput.addEventListener('keypress', (event) => {
+    if (event.key === 'Enter') {
+      authSignInBtn.click();
     }
   });
 

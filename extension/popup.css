@@ -346,6 +346,17 @@ body {
   border-color: #667eea;
 }
 
+.auth-credentials {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+.auth-sign-in-btn {
+  margin-left: 0;
+  width: fit-content;
+}
+
 .save-btn {
   padding: 10px 14px;
   font-size: 13px;
@@ -366,6 +377,7 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .auth-actions .save-btn {
