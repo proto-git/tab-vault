@@ -1,10 +1,14 @@
 // Load environment variables (must be first import)
 import 'dotenv/config';
 
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import captureRouter from './routes/capture.js';
 import { authGate, isAuthEnforced } from './middleware/auth.js';
+import { apiRateLimit } from './middleware/rateLimit.js';
+import { withSupabaseRequestContext } from './services/supabase.js';
+import { logEvent, logRequestLifecycle, setErrorCode } from './services/telemetry.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,9 +40,17 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Request logging
+// Request context + structured request telemetry
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  const requestIdHeader = req.headers['x-request-id'];
+  req.requestId = typeof requestIdHeader === 'string' && requestIdHeader.trim()
+    ? requestIdHeader.trim()
+    : randomUUID();
+
+  res.setHeader('x-request-id', req.requestId);
+  const startedAtMs = Date.now();
+  res.on('finish', () => logRequestLifecycle(req, res, startedAtMs));
+
   next();
 });
 
@@ -64,14 +76,44 @@ app.get('/auth/config', (req, res) => {
 });
 
 // API routes
-app.use('/api', authGate, captureRouter);
+app.use(
+  '/api',
+  authGate,
+  apiRateLimit,
+  (req, res, next) => withSupabaseRequestContext(req, next),
+  captureRouter
+);
 
 // Error handling
 app.use((err, req, res, next) => {
+  let statusCode = err?.statusCode || err?.status || 500;
+  const message = err?.message || 'Internal server error';
+
+  // RLS/permission issues should surface as explicit 403s.
+  if (
+    err?.code === '42501'
+    || /row-level security|permission denied/i.test(message)
+  ) {
+    statusCode = 403;
+    setErrorCode(res, 'RLS_DENIED');
+  } else if (statusCode >= 500) {
+    setErrorCode(res, 'INTERNAL_ERROR');
+  }
+
+  logEvent('endpoint_error', {
+    request_id: req.requestId || null,
+    user_id: req.user?.id || null,
+    route: req.originalUrl || req.path,
+    status_code: statusCode,
+    latency_ms: null,
+    error_code: res.locals?.errorCode || 'UNHANDLED_ERROR',
+    details: process.env.NODE_ENV === 'development' ? message : undefined,
+  });
+
   console.error('Error:', err);
-  res.status(500).json({
+  res.status(statusCode).json({
     success: false,
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    error: process.env.NODE_ENV === 'development' ? message : 'Internal server error'
   });
 });
 

@@ -19,6 +19,36 @@ function getCacheKey(userId) {
   return userId || '__anonymous__';
 }
 
+function buildDefaultCategoryRows(userId) {
+  return DEFAULT_CATEGORIES.map((category, index) => ({
+    name: category.name,
+    description: category.description,
+    color: category.color,
+    icon: 'folder',
+    is_default: true,
+    sort_order: index + 1,
+    user_id: userId,
+  }));
+}
+
+async function ensureDefaultCategories(userId) {
+  if (!userId) {
+    return DEFAULT_CATEGORIES;
+  }
+
+  const defaults = buildDefaultCategoryRows(userId);
+  const { data, error } = await supabase
+    .from('categories')
+    .upsert(defaults, { onConflict: 'user_id,name' })
+    .select('*');
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+}
+
 /**
  * Get all categories
  * @returns {Promise<Array>} List of categories
@@ -39,7 +69,7 @@ export async function getCategories(userId = null) {
       .select('*');
 
     if (userId) {
-      query = query.or(`is_default.eq.true,user_id.eq.${userId}`);
+      query = query.eq('user_id', userId);
     }
 
     const { data, error } = await query
@@ -50,8 +80,15 @@ export async function getCategories(userId = null) {
       return DEFAULT_CATEGORIES;
     }
 
-    cachedCategories.set(cacheKey, data);
-    return data;
+    // For authenticated users, lazily bootstrap default rows when needed.
+    if (userId && (!data || data.length === 0)) {
+      const createdDefaults = await ensureDefaultCategories(userId);
+      cachedCategories.set(cacheKey, createdDefaults);
+      return createdDefaults;
+    }
+
+    cachedCategories.set(cacheKey, data || []);
+    return data || [];
   } catch (err) {
     console.error('[Categories] Error:', err.message);
     return DEFAULT_CATEGORIES;
