@@ -1,12 +1,17 @@
 // Background Processor Pipeline
 // Orchestrates: scrape → AI process → embed → update
 
-import { supabase, isConfigured as isSupabaseConfigured } from './supabase.js';
+import {
+  supabase,
+  isConfigured as isSupabaseConfigured,
+  withSupabaseAuthContext,
+} from './supabase.js';
 import { scrapeUrl, isScrapeable, extractAuthor } from './scraper.js';
 import { processContent, generateDisplayTitle, extractInsights, isConfigured as isAiConfigured } from './ai.js';
 import { generateCaptureEmbedding, formatForPgVector, isConfigured as isEmbeddingsConfigured } from './embeddings.js';
 import { detectSourcePlatform } from './sourceDetector.js';
 import { extractImageUrl, storeImage } from './imageStorage.js';
+import { logEvent } from './telemetry.js';
 
 /**
  * Process a single capture through the AI pipeline
@@ -14,12 +19,13 @@ import { extractImageUrl, storeImage } from './imageStorage.js';
  * @param {string|null} userId - Optional user ID to enforce ownership
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function processCapture(captureId, userId = null) {
-  if (!isSupabaseConfigured()) {
-    return { success: false, error: 'Supabase not configured' };
-  }
+export async function processCapture(captureId, userId = null, context = {}) {
+  const runPipeline = async () => {
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: 'Supabase not configured' };
+    }
 
-  try {
+    try {
     // 1. Fetch the capture
     let fetchQuery = supabase
       .from('captures')
@@ -175,47 +181,94 @@ export async function processCapture(captureId, userId = null) {
     }
 
     console.log(`[Processor] Capture processed successfully: ${captureId}`);
-    return { success: true };
+      return { success: true };
 
-  } catch (error) {
-    console.error('[Processor] Processing failed:', error.message);
+    } catch (error) {
+      console.error('[Processor] Processing failed:', error.message);
+      logEvent('processing_failure', {
+        request_id: context.requestId || null,
+        user_id: userId,
+        route: 'background_processor',
+        status_code: 500,
+        latency_ms: null,
+        error_code: 'PROCESSING_FAILURE',
+        capture_id: captureId,
+      });
 
-    // Update capture with error status (preserve user scope when provided).
-    if (isSupabaseConfigured()) {
-      try {
-        let errorStatusQuery = supabase
-          .from('captures')
-          .update({
-            status: 'error',
-            error_message: error.message,
-          })
-          .eq('id', captureId);
+      // Update capture with error status (preserve user scope when provided).
+      if (isSupabaseConfigured()) {
+        try {
+          let errorStatusQuery = supabase
+            .from('captures')
+            .update({
+              status: 'error',
+              error_message: error.message,
+            })
+            .eq('id', captureId);
 
-        if (userId) {
-          errorStatusQuery = errorStatusQuery.eq('user_id', userId);
+          if (userId) {
+            errorStatusQuery = errorStatusQuery.eq('user_id', userId);
+          }
+
+          await errorStatusQuery;
+        } catch {
+          // Best-effort status update; original processing error is returned below.
         }
-
-        await errorStatusQuery;
-      } catch {
-        // Best-effort status update; original processing error is returned below.
       }
-    }
 
-    return { success: false, error: error.message };
+      return { success: false, error: error.message };
+    }
+  };
+
+  if (context.authToken) {
+    return withSupabaseAuthContext({
+      authToken: context.authToken,
+      requestId: context.requestId || null,
+      userId,
+    }, runPipeline);
   }
+
+  return runPipeline();
 }
 
 /**
  * Process a capture in the background (fire and forget)
  * @param {string} captureId - The capture ID to process
  */
-export function processInBackground(captureId, userId = null) {
+function normalizeBackgroundOptions(userIdOrOptions = null) {
+  if (typeof userIdOrOptions === 'object' && userIdOrOptions !== null) {
+    return {
+      userId: userIdOrOptions.userId || null,
+      authToken: userIdOrOptions.authToken || null,
+      requestId: userIdOrOptions.requestId || null,
+    };
+  }
+
+  return {
+    userId: userIdOrOptions,
+    authToken: null,
+    requestId: null,
+  };
+}
+
+export function processInBackground(captureId, userIdOrOptions = null) {
+  const options = normalizeBackgroundOptions(userIdOrOptions);
+
   // Use setImmediate to not block the response
   setImmediate(async () => {
     try {
-      await processCapture(captureId, userId);
+      await processCapture(captureId, options.userId, options);
     } catch (error) {
       console.error('[Processor] Background processing error:', error);
+      logEvent('processing_failure', {
+        request_id: options.requestId || null,
+        user_id: options.userId || null,
+        route: 'background_processor',
+        status_code: 500,
+        latency_ms: null,
+        error_code: 'BACKGROUND_PROCESSOR_ERROR',
+        capture_id: captureId,
+      });
     }
   });
 }

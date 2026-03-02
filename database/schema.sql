@@ -119,6 +119,7 @@ BEGIN
     1 - (c.embedding <=> query_embedding) AS similarity
   FROM captures c
   WHERE c.embedding IS NOT NULL
+    AND c.user_id = auth.uid()
     AND 1 - (c.embedding <=> query_embedding) > match_threshold
     AND (filter_user_id IS NULL OR c.user_id = filter_user_id)
     AND (filter_source IS NULL OR c.source_platform = filter_source)
@@ -130,13 +131,26 @@ $$;
 -- Row Level Security (optional but recommended)
 ALTER TABLE captures ENABLE ROW LEVEL SECURITY;
 
--- Policy: Allow all operations for now (single user)
--- You can make this more restrictive with auth later
-CREATE POLICY "Allow all operations" ON captures
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
+CREATE POLICY captures_select_own ON captures
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY captures_insert_own ON captures
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY captures_update_own ON captures
+  FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY captures_delete_own ON captures
+  FOR DELETE
+  USING (auth.uid() = user_id);
 
 -- Grant permissions
-GRANT ALL ON captures TO anon;
-GRANT ALL ON captures TO authenticated;
+REVOKE ALL ON captures FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON captures TO authenticated;
+
+REVOKE ALL ON FUNCTION search_captures(vector, double precision, integer, uuid, text) FROM anon;
+GRANT EXECUTE ON FUNCTION search_captures(vector, double precision, integer, uuid, text) TO authenticated;

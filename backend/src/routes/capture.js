@@ -94,7 +94,11 @@ router.post('/capture', async (req, res, next) => {
     console.log('[CAPTURED]', url);
 
     // Queue for AI processing (runs in background)
-    processInBackground(data.id, userId);
+    processInBackground(data.id, {
+      userId,
+      authToken: req.authToken || null,
+      requestId: req.requestId || null,
+    });
 
     res.json({
       success: true,
@@ -416,9 +420,10 @@ router.patch('/captures/:id', async (req, res, next) => {
     );
     const { data, error } = await updateQuery
       .select('id, url, title, display_title, summary, category, tags, quality_score, created_at, notion_synced, notion_page_id, key_takeaways, action_items, source_platform, author_name, image_url')
-      .single();
+      .maybeSingle();
 
-    if (error) {
+    // PostgREST returns PGRST116 when no rows are visible/updated under RLS.
+    if (error && error.code !== 'PGRST116') {
       throw error;
     }
 
